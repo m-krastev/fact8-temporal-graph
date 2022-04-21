@@ -1,0 +1,25 @@
+model_saving_dir: ''
+model_name: 'tgat'
+
+ckpt_path: ''
+param:
+  simulate:
+    num_layers: 2
+    use_time: 'time'
+    agg_method: 'attn'
+    attn_mode: 'prod'
+    seq_len: 20
+    num_heads: 2
+    dropout: 0.1
+    uniform_sample_ngh: False
+    # num_neigs_limit: 20
+  simulate_v2:
+    num_layers: 2
+    use_time: 'time'
+    agg_method: 'attn'
+    attn_mode: 'prod'
+    seq_len: 20
+    num_heads: 2
+    dropout: 0.1
+    uniform_sample_ngh: False
+    # num_neigs_limit: 20

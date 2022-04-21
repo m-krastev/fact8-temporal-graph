@@ -1,0 +1,11 @@
+# simulated temporal graph dataset
+dataset_name: 'simulate_v2'
+dataset_path: ''
+node_feat_dim: 64
+edge_feat_dim: 64
+node_feat_zero: False
+edge_feat_zero: True
+# dataset_root: '/tmp/datasets'
+random_split_flag: True
+data_split_ratio: [0.8, 0.1, 0.1]
+seed: 2
