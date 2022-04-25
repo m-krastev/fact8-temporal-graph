@@ -15,15 +15,19 @@ def pipeline(config: DictConfig):
     # set configurations
     # model config
     # explainer config
+    
     config.models.param = config.models.param[config.datasets.dataset_name]
-    config.explainers.param = config.explainers.param[config.datasets.dataset_name]
     config.datasets.dataset_path = str(ROOT_DIR/'xgraph'/'dataset'/'data'/f'{config.datasets.dataset_name}.csv')
     config.models.ckpt_path = str(ROOT_DIR/'xgraph'/'models'/'checkpoints'/f'{config.models.model_name}_{config.datasets.dataset_name}_best.pth')
+    config.explainers.param = config.explainers.param[config.datasets.dataset_name]
+    
+    config.explainers.results_saved_dir = str(ROOT_DIR/'xgraph'/'saved_mcts_results')
+    config.explainers.results_saved_filename = f'{config.datasets.dataset_name}_{config.models.model_name}_{config.explainers.param.target_event_idx}.pt'
     print(OmegaConf.to_yaml(config))
 
     # import ipdb; ipdb.set_trace()
 
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and  config.explainers.use_gpu:
         device = torch.device('cuda', index=config.device_id)
     else:
         device = torch.device('cpu')
@@ -38,14 +42,23 @@ def pipeline(config: DictConfig):
                     use_time=config.models.param.use_time, agg_method=config.models.param.agg_method, 
                     attn_mode=config.models.param.attn_mode, seq_len=config.models.param.seq_len, 
                     n_head=config.models.param.num_heads, drop_out=config.models.param.dropout)
-    else: raise NotImplementedError('To do.')
+    else: 
+        raise NotImplementedError('To do.')
 
-    state_dict = torch.load(config.models.ckpt_path)
+    state_dict = torch.load(config.models.ckpt_path, map_location='cpu')
     model.load_state_dict(state_dict)
     model.to(device)
 
-    explainer = SubgraphXTG(model, config.models.model_name, events, config.explainers.param.explanation_level, device=device,
-                            rollout=60
+    
+    explainer = SubgraphXTG(model, config.models.model_name, config.datasets.dataset_name,
+                            events,
+                            config.explainers.param.explanation_level, 
+                            device=device,
+                            rollout=config.explainers.param.rollout,
+                            save_results=config.explainers.results_save,
+                            save_dir=config.explainers.results_saved_dir,
+                            save_filename=config.explainers.results_saved_filename,
+                            load_results=config.explainers.load_results,
     )
 
 
@@ -55,18 +68,32 @@ def pipeline(config: DictConfig):
     # target_event_idx = 19
     # target_event_idx = 29
     target_event_idx = config.explainers.param.target_event_idx
-    tree_results, ori_event_idxs, candidates_idxs, important_events = explainer(event_idx=target_event_idx)
+    tree_results, tree_node_x = explainer(event_idx=target_event_idx)
 
+    exit(0)
     # evaluation
     from dig.xgraph.evaluation.metrics_tg import ExplanationProcessorTG
     import json
     sparsity = 0.0
-    evaluator = ExplanationProcessorTG(explainer.tgnn_reward_wraper, explainer.mcts_state_map, sparsity, target_event_idx)
+    mcts_state_map = explainer.mcts_state_map if not config.explainers.load_results else None
+    evaluator = ExplanationProcessorTG(explainer.tgnn_reward_wraper, tree_results, sparsity, target_event_idx,
+                                    candidate_number=len(explainer.candidate_events),
+                                    mcts_state_map=mcts_state_map,
+                                    )
     evaluation_dict = evaluator.evaluate()
     print(json.dumps(evaluation_dict, indent=4))
+
+    if not config.explainers.load_results: # TODO: to optimize this
+        mcts_info_dict = {
+            'rollout number': explainer.mcts_state_map.n_rollout,
+            'state number': len(explainer.mcts_state_map.state_map),
+            'rollout avg runtime': explainer.mcts_state_map.run_time / explainer.mcts_state_map.n_rollout,
+            'rollout total time': explainer.mcts_state_map.run_time
+        }
+        print(json.dumps(mcts_info_dict, indent=4))
     
-    print('candidate event idxs: ', candidates_idxs)
-    print('searched important event idxs: ', important_events)
+    print('candidate event idxs: ', explainer.candidate_events)
+    print('searched important event idxs: ', tree_node_x.coalition)
 
 
 

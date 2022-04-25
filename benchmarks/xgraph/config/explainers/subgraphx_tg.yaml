@@ -1,13 +1,27 @@
-explanation_result_dir: ''
+
+results_save: False
+results_saved_dir: ''
+results_saved_filename: ''
+load_results: False
+use_gpu: True
 
 param:
   simulate:
     explanation_level: 'event'
     target_event_idx: 9909
     verbose: True
+    rollout: 30
+    tscore_coef: None
+    beta: None
   simulate_v2:
     explanation_level: 'event'
     target_event_idx: 59
     verbose: True
+    rollout: 10
+  garden_5:
+    explanation_level: 'event'
+    target_event_idx: 800
+    verbose: True
+    rollout: 30
 
   

@@ -1,8 +1,8 @@
 # simulated temporal graph dataset
-dataset_name: 'simulate_v2'
+dataset_name: 'garden_5'
 dataset_path: ''
 node_feat_dim: 64
 edge_feat_dim: 64
-node_feat_zero: False
+node_feat_zero: True
 edge_feat_zero: True
 seed: 2

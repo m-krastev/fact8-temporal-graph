@@ -3,6 +3,8 @@ import copy
 import math
 import time
 import itertools
+from sklearn.utils import shuffle
+from sympy import root
 import torch
 import numpy as np
 import networkx as nx
@@ -446,8 +448,8 @@ class MCTSNode(object):
         self.N = info_dict['N']
         self.P = info_dict['P']
         self.coalition = info_dict['coalition']
-        self.ori_graph = info_dict['ori_graph']
-        self.data = info_dict['data'].to(self.device)
+        # self.ori_graph = info_dict['ori_graph']
+        # self.data = info_dict['data'].to(self.device)
         self.children = []
         return self
 
@@ -539,6 +541,12 @@ class MCTS(object):
 
         # self.root_coalition = sorted([node for node in range(self.num_nodes)])
         self.initialize_tree()
+        self.recorder = {
+            'rollout': [],
+            'runtime': [],
+            'best_reward': [],
+            'num_states': []
+        }
     
     
 
@@ -584,7 +592,7 @@ class MCTS(object):
         # Expand if this node has never been visited
         if len(tree_node.children) == 0:
             # subgraph_all_events = tree_node.coalition
-            candidate_set = set(self.candidate_events)
+            # candidate_set = set(self.candidate_events)
             
             # expand_events = [e_idx for e_idx in subgraph_all_events if e_idx in candidate_set] # only care events in the candidate list
             expand_events = tree_node.coalition
@@ -620,14 +628,44 @@ class MCTS(object):
             for child, score in zip(tree_node.children, scores):
                 child.P = score
 
+        # import ipdb; ipdb.set_trace()
+
         # If this node has children (it has been visited), then directly select one child
         sum_count = sum([c.N for c in tree_node.children])
         # import ipdb; ipdb.set_trace()
-        selected_node = max(tree_node.children, key=lambda x: x.Q() + x.U(sum_count))
+        # selected_node = max(tree_node.children, key=lambda x: x.Q() + x.U(sum_count))
+        selected_node = max(tree_node.children, key=lambda x: self.compute_node_score(x, sum_count))
+
+        
         v = self.mcts_rollout(selected_node)
         selected_node.W += v
         selected_node.N += 1
         return v
+    
+    def compute_node_score(self, node, sum_count):
+        """
+        node score computation strategy
+        """
+        # import ipdb; ipdb.set_trace()
+        # time score
+        # tscore_eff = -10 # 0.1
+        tscore_coef = 0.1 # -100, -50, -10, -5, -1, 0, 0.5
+
+        beta = 3
+        max_event_idx = max(self.root.coalition)
+        curr_t = self.events['ts'][max_event_idx]
+        ts = self.events['ts'][node.coalition].values # np array
+        delta_ts = curr_t - ts
+        t_score_exp = np.exp( beta * -1 * delta_ts)
+        t_score_exp = np.sum( t_score_exp )
+
+        # uct score
+        uct_score = node.Q() + node.U(sum_count)
+
+        # final score
+        final_score = uct_score + tscore_coef * t_score_exp
+
+        return final_score
 
 
     def mcts(self, verbose=True):
@@ -639,9 +677,23 @@ class MCTS(object):
             if verbose:
                 elapsed_time = time.time() - start_time
                 print(f"At the {rollout_idx} rollout, {len(self.state_map)} states have been explored. Time: {elapsed_time:.2f} s")
+            
+            # record
+            self.recorder['rollout'].append(rollout_idx)
+            self.recorder['runtime'].append(elapsed_time)
+            self.recorder['best_reward'].append( np.max(list(map(lambda x: x.P, self.state_map.values()))) )
+            self.recorder['num_states'].append( len(self.state_map) )
+
+        end_time = time.time()
+        self.run_time = end_time - start_time
 
         explanations = [node for _, node in self.state_map.items()]
         explanations = sorted(explanations, key=lambda x: x.P, reverse=True)
+
+        # save records
+        self.recorder = pd.DataFrame(self.recorder)
+        
+
         return explanations
     
     def initialize_tree(self):
@@ -653,7 +705,7 @@ class MCTS(object):
         self.state_map = {self.root_key: self.root}
 
     def _node_key(self, coalition):
-        return "_".join(map(lambda x: str(x), sorted(coalition) ) )
+        return "_".join(map(lambda x: str(x), sorted(coalition) ) ) # NOTE: have sorted
     
     def set_candidate_events(self):
         if self.model_name == 'tgat':
@@ -717,14 +769,15 @@ class SubgraphXTG(object):
         >>> subgraphx = SubgraphX(model=model, num_classes=2)
         >>> _, explanation_results, related_preds = subgraphx(x, edge_index)
     """
-    def __init__(self, model, model_name: str, all_events: DataFrame,  explanation_level: str, device, num_hops: Optional[int] = None, verbose: bool = True,
+    def __init__(self, model, model_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, num_hops: Optional[int] = None, verbose: bool = True,
                  explain_graph: bool = True, rollout: int = 20, min_atoms: int = 1, c_puct: float = 150.0,
                  expand_atoms=14, local_radius=4, sample_num=100, reward_method='mc_l_shapley',
-                 load_results=False, save_dir: Optional[str] = None,
+                 load_results=False, save_dir: Optional[str] = None, save_results: bool= True, save_filename: str = None,
                  filename: str = 'example', vis: bool = True):
 
         self.model = model
         self.model_name = model_name
+        self.dataset_name = dataset_name
         self.all_events = all_events
         self.num_users = all_events.iloc[:, 0].max() + 1
         self.model.eval()
@@ -754,10 +807,9 @@ class SubgraphXTG(object):
         # saving and visualization
         self.vis = vis
         self.load_results = load_results
-        self.save_dir = save_dir if save_dir is not None else str(ROOT_DIR/'xgraph'/'saved_mcts_results')
-        self.filename = filename
-        self.save = True if self.save_dir is not None else False
-
+        self.save_dir = save_dir
+        self.save_filename = save_filename
+        self.save = save_results
 
         # construct TGNN reward function
         self.tgnn_reward_wraper = TGNNRewardWraper(self.model, self.model_name, self.all_events, self.explanation_level)
@@ -772,23 +824,8 @@ class SubgraphXTG(object):
                 k += 1
         return k
 
-    # def get_reward_func(self, value_func, node_idx=None):
-    #     if self.explain_graph:
-    #         node_idx = None
-    #     else:
-    #         assert node_idx is not None
-    #     return reward_func(reward_method=self.reward_method,
-    #                        value_func=value_func,
-    #                        node_idx=node_idx,
-    #                        local_radius=self.local_radius,
-    #                        sample_num=self.sample_num,
-    #                        subgraph_building_method=self.subgraph_building_method)
 
     def get_mcts_class(self, events, event_idx: int = None, node_idx: int = None, score_func: Callable = None, candidate_events=None):
-        # if self.explain_graph:
-        #     node_idx = None
-        # else:
-        #     assert node_idx is not None
         if self.explanation_level == 'event':
             pass
         
@@ -811,7 +848,7 @@ class SubgraphXTG(object):
                       vis_name: Optional[str] = None):
         if self.save:
             if vis_name is None:
-                vis_name = f"{self.filename}.png"
+                vis_name = f"{self.save_filename}.png"
         else:
             vis_name = None
         tree_node_x = find_closest_node_result(results, max_nodes=max_nodes)
@@ -843,21 +880,23 @@ class SubgraphXTG(object):
     def read_from_MCTSInfo_list(self, MCTSInfo_list):
         if isinstance(MCTSInfo_list[0], dict):
             ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in MCTSInfo_list]
-        elif isinstance(MCTSInfo_list[0][0], dict):
-            ret_list = []
-            for single_label_MCTSInfo_list in MCTSInfo_list:
-                single_label_ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in single_label_MCTSInfo_list]
-                ret_list.append(single_label_ret_list)
+        else: raise NotImplementedError
+        # elif isinstance(MCTSInfo_list[0][0], dict):
+        #     ret_list = []
+        #     for single_label_MCTSInfo_list in MCTSInfo_list:
+        #         single_label_ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in single_label_MCTSInfo_list]
+        #         ret_list.append(single_label_ret_list)
         return ret_list
 
     def write_from_MCTSNode_list(self, MCTSNode_list):
         if isinstance(MCTSNode_list[0], MCTSNode):
             ret_list = [node.info for node in MCTSNode_list]
-        elif isinstance(MCTSNode_list[0][0], MCTSNode):
-            ret_list = []
-            for single_label_MCTSNode_list in MCTSNode_list:
-                single_label_ret_list = [node.info for node in single_label_MCTSNode_list]
-                ret_list.append(single_label_ret_list)
+        else: raise NotImplementedError
+        # elif isinstance(MCTSNode_list[0][0], MCTSNode):
+        #     ret_list = []
+        #     for single_label_MCTSNode_list in MCTSNode_list:
+        #         single_label_ret_list = [node.info for node in single_label_MCTSNode_list]
+        #         ret_list.append(single_label_ret_list)
         return ret_list
     
     def find_candidates(self, target_event_idx):
@@ -916,12 +955,13 @@ class SubgraphXTG(object):
                 node_idx: Optional[int] = None,
                 time: Optional[float] = None,
                 event_idx: Optional[int] = None,
-                saved_MCTSInfo_list: Optional[List[List]] = None):
+                saved_MCTSInfo_list: Optional[List[List]] = None,
+                subgraph_df: DataFrame = None):
         
         if saved_MCTSInfo_list is not None:
             results = self.read_from_MCTSInfo_list(saved_MCTSInfo_list)
             tree_node_x = find_closest_node_result(results)
-            return tree_node_x
+            return results, tree_node_x
         
         # support event-level first
         if self.explanation_level == 'node':
@@ -936,7 +976,6 @@ class SubgraphXTG(object):
             # import ipdb; ipdb.set_trace()
             self.ori_subgraph_df = subgraph_df
             # set reward function
-            # self.tgnn_reward_wraper.compute_original_score(self.all_events.index.values.tolist(), event_idx)
             self.tgnn_reward_wraper.compute_original_score(subgraph_df.index.values.tolist(), event_idx)
             # import ipdb; ipdb.set_trace()
 
@@ -945,79 +984,48 @@ class SubgraphXTG(object):
             # search
             candidate_events = self.find_candidates(event_idx)
             if len(candidate_events) > 20:
-                candidate_events = candidate_events[-10:]
-                print('more than 10 candidates, used 10 ones:')
+                candidate_events = candidate_events[-15:]
+                candidate_events = sorted(candidate_events)
+                print('more than 20 candidates, used 15 ones:')
                 print(candidate_events)
 
+            # self.candidate_events = shuffle( candidate_events ) # strategy 1
+            # self.candidate_events = candidate_events # strategy 2
+            # self.candidate_events.reverse()
+            self.candidate_events = candidate_events # strategy 3
 
-            self.mcts_state_map = self.get_mcts_class(events=subgraph_df, event_idx=event_idx, candidate_events=candidate_events, score_func=payoff_func)
+            self.mcts_state_map = self.get_mcts_class(events=subgraph_df, event_idx=event_idx, candidate_events=self.candidate_events, score_func=payoff_func)
+            
 
             print('search graph:')
             print(subgraph_df.to_string(max_rows=50))
             print(f'{len(candidate_events)} candicate events:', self.mcts_state_map.candidate_events)
-            
-            
             # import ipdb; ipdb.set_trace()
-
             results = self.mcts_state_map.mcts(verbose=self.verbose)
 
-        elif self.explanation_level == 'graph':
-            pass
         else: raise NotImplementedError('Wrong explanaion level')
 
         tree_node_x = find_closest_node_result(results)
         results = sorted(results, key=lambda x:x.P)
 
-        ori_event_idxs = self.ori_subgraph_df.index.to_list() # all edge_idxs that gnn model can see
-        candidates_idxs = self.mcts_state_map.candidate_events # candidates to remove
+        # ori_event_idxs = self.ori_subgraph_df.index.to_list() # all edge_idxs that gnn model can see
+        # candidates_idxs = self.mcts_state_map.candidate_events # candidates to remove
 
         print('\nsearched tree nodes (preserved edge idxs):')
         for node in results:
             # preserved_events = preserved_candidates(node.coalition, ori_event_idxs, candidates_idxs)
             # removed_idxs = obtain_removed_idxs(node.coalition, self.ori_subgraph_df.index.to_list())
             # preserved_events_gnn_score = self.tgnn_reward_wraper(preserved_events, event_idx)
-            print(node.coalition, ': ', node.P)
+            print(sorted(node.coalition), ': ', node.P)
 
         # best_preserved_events = preserved_candidates(tree_node_x.coalition, ori_event_idxs, candidates_idxs)
-        important_events = tree_node_x.coalition
+        # important_events = tree_node_x.coalition
         # removed_idxs = obtain_removed_idxs(tree_node_x.coalition, self.ori_subgraph_df.index.to_list())
 
-        tree_results = self.write_from_MCTSNode_list(results)
-        return tree_results, ori_event_idxs, candidates_idxs, important_events
-        # return tree_node_x
+        
+        tree_results = results
+        return tree_results, tree_node_x
 
-        # keep the important structure
-        masked_node_list = [node for node in range(tree_node_x.data.x.shape[0])
-                            if node in tree_node_x.coalition]
-
-        # remove the important structure, for node_classification,
-        # remain the node_idx when remove the important structure
-        maskout_node_list = [node for node in range(tree_node_x.data.x.shape[0])
-                             if node not in tree_node_x.coalition]
-        # if not self.explain_graph:
-        #     maskout_node_list += [self.new_node_idx]
-
-
-        # masked_score = gnn_score(masked_node_list,
-        #                          tree_node_x.data,
-        #                          value_func=value_func,
-        #                          subgraph_building_method=self.subgraph_building_method)
-
-        # maskout_score = gnn_score(maskout_node_list,
-        #                           tree_node_x.data,
-        #                           value_func=value_func,
-        #                           subgraph_building_method=self.subgraph_building_method)
-
-        # sparsity_score = sparsity(masked_node_list, tree_node_x.data,
-        #                           subgraph_building_method=self.subgraph_building_method)
-
-        # results = self.write_from_MCTSNode_list(results)
-        # related_pred = {'masked': masked_score,
-        #                 'maskout': maskout_score,
-        #                 'origin': probs[node_idx, label].item(),
-        #                 'sparsity': sparsity_score}
-
-        # return results, related_pred
 
     def __call__(self, node_idx: Union[int, None] = None, event_idx: Union[int, None] = None, max_events: Union[int, None] = None):
         r""" explain the GNN behavior for the graph using SubgraphX method
@@ -1033,18 +1041,40 @@ class SubgraphXTG(object):
         # ex_labels = tuple(torch.tensor([label]).to(self.device) for label in labels)
 
         if self.load_results:
-            assert os.path.isfile(os.path.join(self.save_dir, f"{self.filename}.pt"))
-            saved_results = torch.load(os.path.join(self.save_dir, f"{self.filename}.pt"))
+            assert os.path.isfile(os.path.join(self.save_dir, f"{self.save_filename}.pt"))
+            saved_contents = torch.load(os.path.join(self.save_dir, f"{self.save_filename}.pt"))
+            
+            saved_MCTSInfo_list = saved_contents['saved_MCTSInfo_list']
+            # tree_results = self.read_from_MCTSInfo_list(saved_MCTSInfo_list)
+            # tree_node_x = find_closest_node_result(tree_results)
+            self.candidate_events = saved_contents['candidate_events']
+            self.ori_subgraph_df = saved_contents['ori_subgraph_df']
+            self.tgnn_reward_wraper.compute_original_score(self.ori_subgraph_df.index.values.tolist(), event_idx)
+            # return tree_results, tree_node_x
         else:
-            saved_results = None
+            saved_MCTSInfo_list = None
+        # import ipdb; ipdb.set_trace()
         
         # explanation_results, related_pred = self.explain()
-        tree_results, ori_event_idxs, candidates_idxs, important_events = self.explain(node_idx=node_idx,
-                                                    event_idx=event_idx, 
-                                                    saved_MCTSInfo_list=saved_results)
-        
-        if self.save:
-            torch.save(tree_results, os.path.join(self.save_dir, f"{self.filename}.pt"))
+        tree_results, tree_node_x = self.explain(node_idx=node_idx,
+                                                    event_idx=event_idx,
+                                                    saved_MCTSInfo_list=saved_MCTSInfo_list
+                                                    )
+        # import ipdb; ipdb.set_trace()
+        # save recorder
+        record_filename = ROOT_DIR.parent/'benchmarks'/'results'/f'{self.model_name}_{self.dataset_name}_{event_idx}.csv'
+        self.mcts_state_map.recorder.to_csv(record_filename, index=False)
+
+        if self.save and not self.load_results:
+            saved_contents = {
+                'candidate_events': self.mcts_state_map.candidate_events,
+                'saved_MCTSInfo_list': self.write_from_MCTSNode_list(tree_results),
+                'original_scores': self.tgnn_reward_wraper.original_scores,
+                'ori_subgraph_df': self.ori_subgraph_df
+            }
+            path_ = os.path.join(self.save_dir, f"{self.save_filename}.pt")
+            torch.save(saved_contents, path_)
+            print(f'results saved at {path_}')
 
         # for label_idx, label in enumerate(ex_labels):
         #     results, related_pred = self.explain(x, edge_index,
@@ -1056,4 +1086,4 @@ class SubgraphXTG(object):
         #     explanation_results.append(results)
 
 
-        return tree_results, ori_event_idxs, candidates_idxs, important_events
+        return tree_results, tree_node_x

@@ -110,7 +110,7 @@ def verify_df(df):
 def run(data_name):
     from dig import ROOT_DIR
     data_dir = ROOT_DIR/'xgraph'/'dataset'/'data'
-    data_path = data_dir/f'{dataset}.csv'
+    data_path = data_dir/f'{data_name}.csv'
 
     # PATH = './processed/{}.csv'.format(data_name)
     OUT_DF = './processed/ml_{}.csv'.format(data_name)
@@ -149,7 +149,8 @@ def run(data_name):
         node_feat = np.vstack([np.zeros((1, feature_dim)), node_feat])
         edge_feat = np.zeros((len(df) + 1, feature_dim))
 
-    elif data_name == 'simulate': # v1
+    # elif data_name == 'simulate': # v1
+    else: # 'simulate', 'garden_5
         feature_dim = 64
         num_nodes = new_df.i.max()
         node_feat = np.zeros((num_nodes + 1, feature_dim)) # node feature, all zeros, the 0-th is not used
@@ -158,7 +159,7 @@ def run(data_name):
         # empty = np.zeros((1, edge_feat.shape[1]))
         # edge_feat = np.vstack([empty, edge_feat]) # edge feature, from data, the 0-th is not used
     
-    else: raise NotImplementedError
+    # else: raise NotImplementedError
     
     print('edge feature shape: ', edge_feat.shape)
     print('node feature shape: ', node_feat.shape)
@@ -166,6 +167,14 @@ def run(data_name):
     np.save(OUT_FEAT, edge_feat) # edge feature matrix
     np.save(OUT_NODE_FEAT, node_feat) # node feature matrix
 
+def process_garden_5():
+    from dig import ROOT_DIR
+    data_dir = ROOT_DIR/'xgraph'/'dataset'/'data'
+    data_path = data_dir/'garden_5.csv'
+    df = pd.read_csv(data_path)
+    if 'label' not in df.columns.to_list():
+        df['label'] = np.ones((len(df),))
+        df.to_csv(data_path, index=False)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -173,4 +182,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
     dataset = args.data
 
+    # process_garden_5()
     run(dataset)

@@ -23,3 +23,12 @@ param:
     dropout: 0.1
     uniform_sample_ngh: False
     # num_neigs_limit: 20
+  garden_5:
+    num_layers: 2
+    use_time: 'time'
+    agg_method: 'attn'
+    attn_mode: 'prod'
+    seq_len: 20
+    num_heads: 2
+    dropout: 0.1
+    uniform_sample_ngh: False

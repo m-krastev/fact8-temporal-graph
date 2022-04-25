@@ -78,10 +78,10 @@ LEARNING_RATE = args.lr
 NODE_DIM = args.node_dim
 TIME_DIM = args.time_dim
 
-import ipdb; ipdb.set_trace()
+# import ipdb; ipdb.set_trace()
 
-MODEL_SAVE_PATH = f'./saved_models/{args.prefix}-{args.agg_method}-{args.attn_mode}-{args.data}.pth'
-get_checkpoint_path = lambda epoch: f'./saved_checkpoints/{args.prefix}-{args.agg_method}-{args.attn_mode}-{args.data}-{epoch}.pth'
+MODEL_SAVE_PATH = f'./saved_models/tgat_{args.data}_best.pth'
+get_checkpoint_path = lambda epoch: f'./saved_checkpoints/{args.data}-{args.agg_method}-{args.attn_mode}-{epoch}.pth'
 
 ### set up logger
 logging.basicConfig(level=logging.INFO)
