@@ -10,7 +10,7 @@ param:
     explanation_level: 'event'
     target_event_idx: 9909
     verbose: True
-    rollout: 30
+    rollout: 500
     tscore_coef: None
     beta: None
   simulate_v2:

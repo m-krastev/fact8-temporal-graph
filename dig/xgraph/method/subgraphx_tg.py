@@ -409,7 +409,7 @@ class PlotUtils(object):
 
 
 class MCTSNode(object):
-    def __init__(self, coalition: list = None, data: Data = None, ori_graph: nx.Graph = None,
+    def __init__(self, coalition: list = None, data: Data = None, created_by_remove: int = None, ori_graph: nx.Graph = None,
                  c_puct: float = 10.0, W: float = 0, N: int = 0, P: float = 0,
                  load_dict: Optional[Dict] = None, device='cpu'):
         self.data = data # node data or edge data? or subgraph data? ignore now.
@@ -418,9 +418,11 @@ class MCTSNode(object):
         self.device = device
         self.c_puct = c_puct
         self.children = []
+        self.created_by_remove = created_by_remove # created by remove which edge from its parents
         self.W = W  # sum of node value
         self.N = N  # times of arrival
         self.P = P  # property score (reward)
+
         if load_dict is not None:
             self.load_info(load_dict)
 
@@ -590,12 +592,21 @@ class MCTS(object):
             return tree_node.P # its score
         
         # Expand if this node has never been visited
-        if len(tree_node.children) == 0:
-            # subgraph_all_events = tree_node.coalition
-            # candidate_set = set(self.candidate_events)
+        # Expand if this node has un-expanded children
+        if len(tree_node.children) != len(tree_node.coalition):
+            # expand_events = tree_node.coalition
             
-            # expand_events = [e_idx for e_idx in subgraph_all_events if e_idx in candidate_set] # only care events in the candidate list
-            expand_events = tree_node.coalition
+            exist_children = set(map( lambda x: x.created_by_remove, tree_node.children ))
+            not_exist_children = list(filter(lambda e_idx:e_idx not in exist_children, tree_node.coalition ) )
+            not_exist_children_score = {}
+            for event in not_exist_children:
+                children_coalition = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
+                not_exist_children_score[event] = self.compute_time_score(children_coalition)
+            
+            # expand only one event
+            expand_event = max( not_exist_children_score, key=not_exist_children_score.get )
+            expand_events = [expand_event, ]
+
             for event in expand_events:
                 important_events = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
 
@@ -609,7 +620,7 @@ class MCTS(object):
                         break
                 
                 if not find_same:
-                    new_tree_node = self.MCTSNodeClass(important_events)
+                    new_tree_node = self.MCTSNodeClass(important_events, created_by_remove=event)
                     self.state_map[subnode_coalition_key] = new_tree_node
                 
                 # find same child ?
@@ -619,7 +630,7 @@ class MCTS(object):
                         find_same_child = True
                         break
                 
-                # expand new children
+                # expand new childrens
                 if not find_same_child:
                     tree_node.children.append(new_tree_node)
             
@@ -641,6 +652,16 @@ class MCTS(object):
         selected_node.W += v
         selected_node.N += 1
         return v
+    
+    def compute_time_score(self, coalition):
+        beta = 3
+        ts = self.events['ts'][coalition].values # np array
+        delta_ts = self.curr_t - ts
+        t_score_exp = np.exp( beta * -1 * delta_ts)
+        t_score_exp = np.sum( t_score_exp )
+        return t_score_exp
+        
+
     
     def compute_node_score(self, node, sum_count):
         """
@@ -703,6 +724,10 @@ class MCTS(object):
         self.root = self.MCTSNodeClass(self.root_coalition)
         self.root_key = self._node_key(self.root_coalition)
         self.state_map = {self.root_key: self.root}
+
+        max_event_idx = max(self.root.coalition)
+        self.curr_t = self.events['ts'][max_event_idx]
+
 
     def _node_key(self, coalition):
         return "_".join(map(lambda x: str(x), sorted(coalition) ) ) # NOTE: have sorted
@@ -771,7 +796,7 @@ class SubgraphXTG(object):
     """
     def __init__(self, model, model_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, num_hops: Optional[int] = None, verbose: bool = True,
                  explain_graph: bool = True, rollout: int = 20, min_atoms: int = 1, c_puct: float = 150.0,
-                 expand_atoms=14, local_radius=4, sample_num=100, reward_method='mc_l_shapley',
+                 expand_atoms=14, local_radius=4, sample_num=100,
                  load_results=False, save_dir: Optional[str] = None, save_results: bool= True, save_filename: str = None,
                  filename: str = 'example', vis: bool = True):
 
@@ -801,7 +826,7 @@ class SubgraphXTG(object):
         # reward function hyper-parameters
         self.local_radius = local_radius
         self.sample_num = sample_num
-        self.reward_method = reward_method
+        # self.reward_method = reward_method
         # self.subgraph_building_method = subgraph_building_method
 
         # saving and visualization
