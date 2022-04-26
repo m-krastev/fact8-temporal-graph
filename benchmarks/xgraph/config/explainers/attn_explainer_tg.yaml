@@ -5,7 +5,7 @@ mcts_saved_dir: ''
 mcts_saved_filename: ''
 load_results: False
 use_gpu: True
-explainer_name: 'subgraphx_tg'
+explainer_name: 'attn_explainer_tg'
 
 param:
   simulate:

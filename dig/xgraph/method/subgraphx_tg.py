@@ -4,7 +4,6 @@ import math
 import time
 import itertools
 from sklearn.utils import shuffle
-from sympy import root
 import torch
 import numpy as np
 import networkx as nx
@@ -660,7 +659,6 @@ class MCTS(object):
         t_score_exp = np.exp( beta * -1 * delta_ts)
         t_score_exp = np.sum( t_score_exp )
         return t_score_exp
-        
 
     
     def compute_node_score(self, node, sum_count):
@@ -732,14 +730,6 @@ class MCTS(object):
     def _node_key(self, coalition):
         return "_".join(map(lambda x: str(x), sorted(coalition) ) ) # NOTE: have sorted
     
-    def set_candidate_events(self):
-        if self.model_name == 'tgat':
-
-            pass
-        
-        pass
-
-    
     @property
     def base_events(self):
         if self.base_events_ is None:
@@ -761,171 +751,32 @@ class MCTS(object):
         return self.base_events + unimportant_events
 
 
-
-class SubgraphXTG(object):
-    r"""
-    The implementation of paper
-    `On Explainability of Graph Neural Networks via Subgraph Explorations <https://arxiv.org/abs/2102.05152>`_.
-    
-    Args:
-        model (:obj:`torch.nn.Module`): The target model prepared to explain
-        num_classes(:obj:`int`): Number of classes for the datasets
-        num_hops(:obj:`int`, :obj:`None`): The number of hops to extract neighborhood of target node
-          (default: :obj:`None`)
-        explain_graph(:obj:`bool`): Whether to explain graph classification model (default: :obj:`True`)
-        rollout(:obj:`int`): Number of iteration to get the prediction
-        min_atoms(:obj:`int`): Number of atoms of the leaf node in search tree
-        c_puct(:obj:`float`): The hyperparameter which encourages the exploration
-        expand_atoms(:obj:`int`): The number of atoms to expand
-          when extend the child nodes in the search tree
-        high2low(:obj:`bool`): Whether to expand children nodes from high degree to low degree when
-          extend the child nodes in the search tree (default: :obj:`False`)
-        local_radius(:obj:`int`): Number of local radius to calculate :obj:`l_shapley`, :obj:`mc_l_shapley`
-        sample_num(:obj:`int`): Sampling time of monte carlo sampling approximation for
-          :obj:`mc_shapley`, :obj:`mc_l_shapley` (default: :obj:`mc_l_shapley`)
-        reward_method(:obj:`str`): The command string to select the
-        subgraph_building_method(:obj:`str`): The command string for different subgraph building method,
-          such as :obj:`zero_filling`, :obj:`split` (default: :obj:`zero_filling`)
-        save_dir(:obj:`str`, :obj:`None`): Root directory to save the explanation results (default: :obj:`None`)
-        filename(:obj:`str`): The filename of results
-        vis(:obj:`bool`): Whether to show the visualization (default: :obj:`True`)
-    Example:
-        >>> # For graph classification task
-        >>> subgraphx = SubgraphX(model=model, num_classes=2)
-        >>> _, explanation_results, related_preds = subgraphx(x, edge_index)
-    """
-    def __init__(self, model, model_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, num_hops: Optional[int] = None, verbose: bool = True,
-                 explain_graph: bool = True, rollout: int = 20, min_atoms: int = 1, c_puct: float = 150.0,
-                 expand_atoms=14, local_radius=4, sample_num=100,
-                 load_results=False, save_dir: Optional[str] = None, save_results: bool= True, save_filename: str = None,
-                 filename: str = 'example', vis: bool = True):
-
+class BaseExplainerTG(object):
+    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, all_events: str, explanation_level: str, device, 
+                verbose: bool = True, results_dir: Optional[str] = None) -> None:
+        """
+        results_dir: dir for saving value results, e.g., fidelity_sparsity. Not mcts_node_list
+        """
         self.model = model
         self.model_name = model_name
+        self.explainer_name = explainer_name # self's name
         self.dataset_name = dataset_name
         self.all_events = all_events
         self.num_users = all_events.iloc[:, 0].max() + 1
-        self.model.eval()
+        self.explanation_level = explanation_level
+        
         self.device = device
-        self.model.to(self.device)
-        # self.num_classes = num_classes
-        self.num_hops = self.update_num_hops(num_hops)
-        self.explain_graph = explain_graph
-        self.explanation_level = explanation_level # `node`, `event`, or `graph`. set 'event' as the default
-        # node: (node_idx, time); event: (event_idx); graph: nothing to be provided
-
         self.verbose = verbose
-
-        # mcts hyper-parameters
-        self.rollout = rollout
-        self.min_atoms = min_atoms
-        self.c_puct = c_puct
-        self.expand_atoms = expand_atoms
-        # self.high2low = high2low
-
-        # reward function hyper-parameters
-        self.local_radius = local_radius
-        self.sample_num = sample_num
-        # self.reward_method = reward_method
-        # self.subgraph_building_method = subgraph_building_method
-
-        # saving and visualization
-        self.vis = vis
-        self.load_results = load_results
-        self.save_dir = save_dir
-        self.save_filename = save_filename
-        self.save = save_results
+        self.results_dir = results_dir
+        
+        self.model.eval()
+        self.model.to(self.device)
 
         # construct TGNN reward function
         self.tgnn_reward_wraper = TGNNRewardWraper(self.model, self.model_name, self.all_events, self.explanation_level)
 
-    def update_num_hops(self, num_hops):
-        if num_hops is not None:
-            return num_hops
-
-        k = 0
-        for module in self.model.modules():
-            if isinstance(module, MessagePassing):
-                k += 1
-        return k
-
-
-    def get_mcts_class(self, events, event_idx: int = None, node_idx: int = None, score_func: Callable = None, candidate_events=None):
-        if self.explanation_level == 'event':
-            pass
-        
-        return MCTS(events,
-                    num_users=self.num_users,
-                    event_idx=event_idx,
-                    node_idx=node_idx,
-                    device=self.device,
-                    score_func=score_func,
-                    n_rollout=self.rollout,
-                    min_atoms=self.min_atoms,
-                    c_puct=self.c_puct,
-                    expand_atoms=self.expand_atoms,
-                    candidate_events=candidate_events
-                    )
-
-    def visualization(self, results: list,
-                      max_nodes: int, plot_utils: PlotUtils, words: Optional[list] = None,
-                      y: Optional[Tensor] = None, title_sentence: Optional[str] = None,
-                      vis_name: Optional[str] = None):
-        if self.save:
-            if vis_name is None:
-                vis_name = f"{self.save_filename}.png"
-        else:
-            vis_name = None
-        tree_node_x = find_closest_node_result(results, max_nodes=max_nodes)
-        if self.explain_graph:
-            if words is not None:
-                plot_utils.plot(tree_node_x.ori_graph,
-                                tree_node_x.coalition,
-                                words=words,
-                                title_sentence=title_sentence,
-                                figname=vis_name)
-            else:
-                plot_utils.plot(tree_node_x.ori_graph,
-                                tree_node_x.coalition,
-                                x=tree_node_x.data.x,
-                                title_sentence=title_sentence,
-                                figname=vis_name)
-        else:
-            subset = self.mcts_state_map.subset
-            subgraph_y = y[subset].to('cpu')
-            subgraph_y = torch.tensor([subgraph_y[node].item()
-                                       for node in tree_node_x.ori_graph.nodes()])
-            plot_utils.plot(tree_node_x.ori_graph,
-                            tree_node_x.coalition,
-                            node_idx=self.mcts_state_map.new_node_idx,
-                            title_sentence=title_sentence,
-                            y=subgraph_y,
-                            figname=vis_name)
-
-    def read_from_MCTSInfo_list(self, MCTSInfo_list):
-        if isinstance(MCTSInfo_list[0], dict):
-            ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in MCTSInfo_list]
-        else: raise NotImplementedError
-        # elif isinstance(MCTSInfo_list[0][0], dict):
-        #     ret_list = []
-        #     for single_label_MCTSInfo_list in MCTSInfo_list:
-        #         single_label_ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in single_label_MCTSInfo_list]
-        #         ret_list.append(single_label_ret_list)
-        return ret_list
-
-    def write_from_MCTSNode_list(self, MCTSNode_list):
-        if isinstance(MCTSNode_list[0], MCTSNode):
-            ret_list = [node.info for node in MCTSNode_list]
-        else: raise NotImplementedError
-        # elif isinstance(MCTSNode_list[0][0], MCTSNode):
-        #     ret_list = []
-        #     for single_label_MCTSNode_list in MCTSNode_list:
-        #         single_label_ret_list = [node.info for node in single_label_MCTSNode_list]
-        #         ret_list.append(single_label_ret_list)
-        return ret_list
-    
     def find_candidates(self, target_event_idx):
-        # TODO: 
+        # TODO: implementation for other models
         from dig.xgraph.dataset.utils_dataset import tgat_node_reindex
         if self.model_name == 'tgat':
             ngh_finder = self.model.ngh_finder
@@ -970,10 +821,152 @@ class SubgraphXTG(object):
             unique_e_idx = unique_e_idx - 1 # NOTE: -1, because ngh_finder stored +1 e_idxs
             unique_e_idx = np.unique(unique_e_idx).tolist()
             
-            return unique_e_idx
             
         else:
             raise NotImplementedError
+        
+        candidate_events = unique_e_idx
+        if len(candidate_events) > 20:
+            candidate_events = candidate_events[-15:]
+            candidate_events = sorted(candidate_events)
+            print('more than 20 candidates, used 15 ones:')
+            print(candidate_events)
+        
+        return candidate_events
+    
+    def _set_ori_subgraph(self, num_hops, event_idx):
+        subgraph_df = k_hop_temporal_subgraph(self.all_events, num_hops=num_hops, event_idx=event_idx)
+        self.ori_subgraph_df = subgraph_df
+
+
+    def _set_candidate_events(self, event_idx):
+        self.candidate_events = self.find_candidates(event_idx)
+
+    def _set_tgnn_wraper(self, event_idx):
+        assert hasattr(self, 'ori_subgraph_df')
+
+        self.tgnn_reward_wraper.compute_original_score(self.ori_subgraph_df.index.values.tolist(), event_idx)
+
+
+
+class SubgraphXTG(BaseExplainerTG):
+    """
+    MCTS based temporal graph GNN explainer
+    """
+    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None,
+                 rollout: int = 20, min_atoms: int = 1, c_puct: float = 150.0,
+                 expand_atoms=14, local_radius=4, sample_num=100,
+                 load_results=False, save_dir: Optional[str] = None, save_results: bool= True, save_filename: str = None,
+                 vis: bool = True):
+
+        super(SubgraphXTG, self).__init__(model=model, 
+                                          model_name=model_name,
+                                          explainer_name=explainer_name,
+                                          dataset_name=dataset_name,
+                                          all_events=all_events,
+                                          explanation_level=explanation_level,
+                                          device=device,
+                                          verbose=verbose,
+                                          results_dir=results_dir,
+                                          )
+        
+
+        # mcts hyper-parameters
+        self.rollout = rollout
+        self.min_atoms = min_atoms
+        self.c_puct = c_puct
+        self.expand_atoms = expand_atoms
+        # self.high2low = high2low
+
+        # reward function hyper-parameters
+        # self.local_radius = local_radius
+        # self.sample_num = sample_num
+        # self.reward_method = reward_method
+        # self.subgraph_building_method = subgraph_building_method
+
+        # saving and visualization
+        # self.vis = vis
+        self.load_results = load_results
+        self.save_dir = save_dir # dir for saving mcts nodes, not evaluation results ( e.g., fidelity )
+        self.save_filename = save_filename
+        self.save = save_results
+
+
+
+    def get_mcts_class(self, events, event_idx: int = None, node_idx: int = None, score_func: Callable = None, candidate_events=None):
+        if self.explanation_level == 'event':
+            pass
+        
+        return MCTS(events,
+                    num_users=self.num_users,
+                    event_idx=event_idx,
+                    node_idx=node_idx,
+                    device=self.device,
+                    score_func=score_func,
+                    n_rollout=self.rollout,
+                    min_atoms=self.min_atoms,
+                    c_puct=self.c_puct,
+                    expand_atoms=self.expand_atoms,
+                    candidate_events=candidate_events
+                    )
+
+    # def visualization(self, results: list,
+    #                   max_nodes: int, plot_utils: PlotUtils, words: Optional[list] = None,
+    #                   y: Optional[Tensor] = None, title_sentence: Optional[str] = None,
+    #                   vis_name: Optional[str] = None):
+    #     if self.save:
+    #         if vis_name is None:
+    #             vis_name = f"{self.save_filename}.png"
+    #     else:
+    #         vis_name = None
+    #     tree_node_x = find_closest_node_result(results, max_nodes=max_nodes)
+    #     if self.explain_graph:
+    #         if words is not None:
+    #             plot_utils.plot(tree_node_x.ori_graph,
+    #                             tree_node_x.coalition,
+    #                             words=words,
+    #                             title_sentence=title_sentence,
+    #                             figname=vis_name)
+    #         else:
+    #             plot_utils.plot(tree_node_x.ori_graph,
+    #                             tree_node_x.coalition,
+    #                             x=tree_node_x.data.x,
+    #                             title_sentence=title_sentence,
+    #                             figname=vis_name)
+    #     else:
+    #         subset = self.mcts_state_map.subset
+    #         subgraph_y = y[subset].to('cpu')
+    #         subgraph_y = torch.tensor([subgraph_y[node].item()
+    #                                    for node in tree_node_x.ori_graph.nodes()])
+    #         plot_utils.plot(tree_node_x.ori_graph,
+    #                         tree_node_x.coalition,
+    #                         node_idx=self.mcts_state_map.new_node_idx,
+    #                         title_sentence=title_sentence,
+    #                         y=subgraph_y,
+    #                         figname=vis_name)
+
+    def read_from_MCTSInfo_list(self, MCTSInfo_list):
+        if isinstance(MCTSInfo_list[0], dict):
+            ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in MCTSInfo_list]
+        else: raise NotImplementedError
+        # elif isinstance(MCTSInfo_list[0][0], dict):
+        #     ret_list = []
+        #     for single_label_MCTSInfo_list in MCTSInfo_list:
+        #         single_label_ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in single_label_MCTSInfo_list]
+        #         ret_list.append(single_label_ret_list)
+        return ret_list
+
+    def write_from_MCTSNode_list(self, MCTSNode_list):
+        if isinstance(MCTSNode_list[0], MCTSNode):
+            ret_list = [node.info for node in MCTSNode_list]
+        else: raise NotImplementedError
+        # elif isinstance(MCTSNode_list[0][0], MCTSNode):
+        #     ret_list = []
+        #     for single_label_MCTSNode_list in MCTSNode_list:
+        #         single_label_ret_list = [node.info for node in single_label_MCTSNode_list]
+        #         ret_list.append(single_label_ret_list)
+        return ret_list
+    
 
 
     def explain(self,
@@ -994,37 +987,36 @@ class SubgraphXTG(object):
             pass
 
         elif self.explanation_level == 'event': # we now only care node/edge(event) level explanations, graph-level explanation is temporarily suspended
-            # extract the subgraph that the search begins with
             assert event_idx is not None
-            subgraph_df = k_hop_temporal_subgraph(self.all_events, num_hops=3, event_idx=event_idx)
+            self._set_ori_subgraph(num_hops=3, event_idx=event_idx)
+            self._set_candidate_events(event_idx)
+            self._set_tgnn_wraper(event_idx)
+
+            
+            # subgraph_df = k_hop_temporal_subgraph(self.all_events, num_hops=3, event_idx=event_idx)
             # subgraph_df = self.all_events.iloc[:event_idx+1, :].copy()
             # import ipdb; ipdb.set_trace()
-            self.ori_subgraph_df = subgraph_df
+            # self.ori_subgraph_df = subgraph_df
             # set reward function
-            self.tgnn_reward_wraper.compute_original_score(subgraph_df.index.values.tolist(), event_idx)
+            # self.tgnn_reward_wraper.compute_original_score(subgraph_df.index.values.tolist(), event_idx)
             # import ipdb; ipdb.set_trace()
 
             payoff_func = self.tgnn_reward_wraper
 
             # search
-            candidate_events = self.find_candidates(event_idx)
-            if len(candidate_events) > 20:
-                candidate_events = candidate_events[-15:]
-                candidate_events = sorted(candidate_events)
-                print('more than 20 candidates, used 15 ones:')
-                print(candidate_events)
+            # candidate_events = self.find_candidates(event_idx)
 
             # self.candidate_events = shuffle( candidate_events ) # strategy 1
             # self.candidate_events = candidate_events # strategy 2
             # self.candidate_events.reverse()
-            self.candidate_events = candidate_events # strategy 3
+            # self.candidate_events = candidate_events # strategy 3
 
             self.mcts_state_map = self.get_mcts_class(events=subgraph_df, event_idx=event_idx, candidate_events=self.candidate_events, score_func=payoff_func)
             
 
             print('search graph:')
             print(subgraph_df.to_string(max_rows=50))
-            print(f'{len(candidate_events)} candicate events:', self.mcts_state_map.candidate_events)
+            print(f'{len(self.candidate_events)} candicate events:', self.mcts_state_map.candidate_events)
             # import ipdb; ipdb.set_trace()
             results = self.mcts_state_map.mcts(verbose=self.verbose)
 

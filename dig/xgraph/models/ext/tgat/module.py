@@ -36,7 +36,7 @@ class ScaledDotProductAttention(torch.nn.Module):
         self.softmax = torch.nn.Softmax(dim=2)
 
     def forward(self, q, k, v, mask=None):
-
+        # import ipdb; ipdb.set_trace()
         attn = torch.bmm(q, k.transpose(1, 2))
         attn = attn / self.temperature
 
@@ -378,6 +378,7 @@ class AttnModel(torch.nn.Module):
         # output = output.squeeze()
         # attn = attn.squeeze()
         output = output.squeeze(1)
+        # import ipdb; ipdb.set_trace()
         attn = attn.squeeze(1)
 
         output = self.merger(output, src)
@@ -393,6 +394,7 @@ class TGAN(torch.nn.Module):
         self.num_layers = num_layers
         self.ngh_finder = ngh_finder
         self.null_idx = null_idx
+        self.n_head = n_head
         self.logger = logging.getLogger(__name__)
         self.n_feat_th = torch.nn.Parameter(torch.from_numpy(n_feat.astype(np.float32)))
         self.e_feat_th = torch.nn.Parameter(torch.from_numpy(e_feat.astype(np.float32)))
@@ -408,6 +410,7 @@ class TGAN(torch.nn.Module):
         self.use_time = use_time
         self.merge_layer = MergeLayer(self.feat_dim, self.feat_dim, self.feat_dim, self.feat_dim)
         
+        self.atten_weights_list = []
         if agg_method == 'attn':
             self.logger.info('Aggregation uses attention model')
             self.attn_model_list = torch.nn.ModuleList([AttnModel(self.feat_dim, 
@@ -464,6 +467,7 @@ class TGAN(torch.nn.Module):
         return pos_score.sigmoid(), neg_score.sigmoid()
     
     def get_prob(self, src_idx_l, target_idx_l, cut_time_l, num_neighbors=20, edge_idx_preserve_list=None, logit=False):
+        self.atten_weights_list = []
         src_embed = self.tem_conv(src_idx_l, cut_time_l, self.num_layers, num_neighbors, edge_idx_preserve_list)
         target_embed = self.tem_conv(target_idx_l, cut_time_l, self.num_layers, num_neighbors, edge_idx_preserve_list)
         # import ipdb; ipdb.set_trace()
@@ -538,5 +542,13 @@ class TGAN(torch.nn.Module):
             # print(f'current layer: {curr_layers}')
             # print('src_idx_l: ', src_idx_l)
             # print('src_ngh_node_batch: ', src_ngh_node_batch)
+            weight = weight.reshape((self.n_head, src_node_batch_th.shape[0], src_ngh_node_batch_th.shape[1]))
+            self.atten_weights_list.append({
+                'layer': curr_layers,
+                'src_nodes': src_node_batch_th,
+                'src_ngh_nodes': src_ngh_node_batch_th,
+                'src_ngh_eidx': src_ngh_eidx_batch,
+                'attn_weight': weight,
+            })
             
             return local

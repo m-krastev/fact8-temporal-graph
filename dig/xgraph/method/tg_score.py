@@ -9,16 +9,15 @@ class TGNNRewardWraper(object):
         """
         self.model = model
         self.model_name = model_name
-        # self.events = events
         self.all_events = all_events
-        self.n_users = all_events.iloc[:, 0].nunique()
+        self.n_users = all_events.iloc[:, 0].max() + 1
         self.explanation_level = explanation_level
 
         self.gamma = 0.05
     
-    def error(self, ori_pred, ptb_pred):
+    # def error(self, ori_pred, ptb_pred):
 
-        pass
+    #     pass
 
     
     def _set_tgat_data(self, target_event_idx):
@@ -73,10 +72,10 @@ class TGNNRewardWraper(object):
         
 
     def __call__(self, events_idxs, target_event_idx):
-        # events_idxs is the events' indices searched by the MCTS, i.e., the coalition list of MC tree nodes.
-        # only events in events_idx can be utilized by the tgat model, or other models
-
-        # target_event_idx is the target edge that we want to compute a score by the temporal GNN model.
+        """
+        events_idxs the all the events' indices could be seen by the gnn model.
+        target_event_idx is the target edge that we want to compute a reward by the temporal GNN model.
+        """
 
         if self.model_name == 'tgat':
             input_data = self._set_tgat_data(target_event_idx)
@@ -91,11 +90,21 @@ class TGNNRewardWraper(object):
         pass
 
     def _compute_gnn_score(self, events_idxs, target_event_idx):
-        input_data = self._set_tgat_data(target_event_idx)
-        scores = self.model.get_prob(*input_data, edge_idx_preserve_list=events_idxs, logit=True)
-        scores = scores.item()
-        return scores
+        """
+        events_idxs the all the events' indices could be seen by the gnn model.
+        target_event_idx is the target edge that we want to compute a gnn score by the temporal GNN model.
+        """
+        if self.model_name == 'tgat':
+            input_data = self._set_tgat_data(target_event_idx)
+            scores = self.model.get_prob(*input_data, edge_idx_preserve_list=events_idxs, logit=True)
+            scores = scores.item()
+            return scores
+        elif self.model_name == 'abc':
+            pass
 
+        pass
+
+        
     def _compute_reward(self, scores_petb, remove_size):
         """
         Reward should be the larger the better.
