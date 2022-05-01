@@ -40,8 +40,12 @@ class ScaledDotProductAttention(torch.nn.Module):
         attn = torch.bmm(q, k.transpose(1, 2))
         attn = attn / self.temperature
 
-        if mask is not None:
-            attn = attn.masked_fill(mask, -1e10)
+        if mask is not None: # NOTE: altered
+            if mask.dtype is torch.bool:
+                attn = attn.masked_fill(mask, -1e10)
+            else:
+                attn = attn * mask
+                attn = attn.masked_fill(mask==0, -1e10) # stabilityz?
 
         attn = self.softmax(attn) # [n * b, l_q, l_k]
         attn = self.dropout(attn) # [n * b, l_v, d]
@@ -388,23 +392,25 @@ class AttnModel(torch.nn.Module):
 class TGAN(torch.nn.Module):
     def __init__(self, ngh_finder: NeighborFinder, n_feat, e_feat,
                  attn_mode='prod', use_time='time', agg_method='attn',
-                 num_layers=3, n_head=4, null_idx=0, drop_out=0.1, seq_len=None):
+                 num_layers=2, n_head=4, null_idx=0, num_neighbors=20, drop_out=0.1):
         super(TGAN, self).__init__()
         
         self.num_layers = num_layers
         self.ngh_finder = ngh_finder
         self.null_idx = null_idx
         self.n_head = n_head
+        self.num_neighbors = num_neighbors
         self.logger = logging.getLogger(__name__)
         self.n_feat_th = torch.nn.Parameter(torch.from_numpy(n_feat.astype(np.float32)))
         self.e_feat_th = torch.nn.Parameter(torch.from_numpy(e_feat.astype(np.float32)))
         self.edge_raw_embed = torch.nn.Embedding.from_pretrained(self.e_feat_th, padding_idx=0, freeze=True)
         self.node_raw_embed = torch.nn.Embedding.from_pretrained(self.n_feat_th, padding_idx=0, freeze=True)
         
-        self.feat_dim = self.n_feat_th.shape[1]
+        self.feat_dim = self.n_feat_th.shape[1] 
         
-        self.n_feat_dim = self.feat_dim
+        self.n_feat_dim = self.feat_dim # NOTE: equal dime assumption
         self.e_feat_dim = self.feat_dim
+        self.t_feat_dim = self.feat_dim
         self.model_dim = self.feat_dim
         
         self.use_time = use_time
@@ -435,55 +441,59 @@ class TGAN(torch.nn.Module):
         
         if use_time == 'time':
             self.logger.info('Using time encoding')
-            self.time_encoder = TimeEncode(expand_dim=self.n_feat_th.shape[1])
+            self.time_encoder = TimeEncode(expand_dim=self.t_feat_dim)
         elif use_time == 'pos':
+            seq_len = self.num_neighbors # NOTE: altered
             assert(seq_len is not None)
             self.logger.info('Using positional encoding')
-            self.time_encoder = PosEncode(expand_dim=self.n_feat_th.shape[1], seq_len=seq_len)
+            self.time_encoder = PosEncode(expand_dim=self.t_feat_dim, seq_len=seq_len)
         elif use_time == 'empty':
             self.logger.info('Using empty encoding')
-            self.time_encoder = EmptyEncode(expand_dim=self.n_feat_th.shape[1])
+            self.time_encoder = EmptyEncode(expand_dim=self.t_feat_dim)
         else:
             raise ValueError('invalid time option!')
         
         self.affinity_score = MergeLayer(self.feat_dim, self.feat_dim, self.feat_dim, 1) #torch.nn.Bilinear(self.feat_dim, self.feat_dim, 1, bias=True)
         
-    def forward(self, src_idx_l, target_idx_l, cut_time_l, num_neighbors=20):
-        
-        src_embed = self.tem_conv(src_idx_l, cut_time_l, self.num_layers, num_neighbors)
-        target_embed = self.tem_conv(target_idx_l, cut_time_l, self.num_layers, num_neighbors)
+    def forward(self, src_idx_l, target_idx_l, cut_time_l):
+        self.atten_weights_list = []
+
+        src_embed = self.tem_conv(src_idx_l, cut_time_l, self.num_layers)
+        target_embed = self.tem_conv(target_idx_l, cut_time_l, self.num_layers)
         
  
         score = self.affinity_score(src_embed, target_embed).squeeze(dim=-1)
         
         return score
 
-    def contrast(self, src_idx_l, target_idx_l, background_idx_l, cut_time_l, num_neighbors=20):
-        src_embed = self.tem_conv(src_idx_l, cut_time_l, self.num_layers, num_neighbors)
-        target_embed = self.tem_conv(target_idx_l, cut_time_l, self.num_layers, num_neighbors)
-        background_embed = self.tem_conv(background_idx_l, cut_time_l, self.num_layers, num_neighbors)
+    def contrast(self, src_idx_l, target_idx_l, background_idx_l, cut_time_l):
+        self.atten_weights_list = []
+
+        src_embed = self.tem_conv(src_idx_l, cut_time_l, self.num_layers)
+        target_embed = self.tem_conv(target_idx_l, cut_time_l, self.num_layers)
+        background_embed = self.tem_conv(background_idx_l, cut_time_l, self.num_layers)
         pos_score = self.affinity_score(src_embed, target_embed).squeeze(dim=-1)
         neg_score = self.affinity_score(src_embed, background_embed).squeeze(dim=-1)
         return pos_score.sigmoid(), neg_score.sigmoid()
     
-    def get_prob(self, src_idx_l, target_idx_l, cut_time_l, num_neighbors=20, edge_idx_preserve_list=None, logit=False):
+    def get_prob(self, src_idx_l, target_idx_l, cut_time_l, edge_idx_preserve_list=None, logit=False, candidate_weights_dict=None):
         self.atten_weights_list = []
-        src_embed = self.tem_conv(src_idx_l, cut_time_l, self.num_layers, num_neighbors, edge_idx_preserve_list)
-        target_embed = self.tem_conv(target_idx_l, cut_time_l, self.num_layers, num_neighbors, edge_idx_preserve_list)
+        src_embed = self.tem_conv(src_idx_l, cut_time_l, self.num_layers, edge_idx_preserve_list=edge_idx_preserve_list, candidate_weights_dict=candidate_weights_dict)
+        target_embed = self.tem_conv(target_idx_l, cut_time_l, self.num_layers, edge_idx_preserve_list=edge_idx_preserve_list, candidate_weights_dict=candidate_weights_dict)
         # import ipdb; ipdb.set_trace()
         pos_score = self.affinity_score(src_embed, target_embed).squeeze(dim=-1)
         # import ipdb; ipdb.set_trace()
-        # return pos_score
         if logit:
             return pos_score
         else:
             return pos_score.sigmoid()
 
-    def tem_conv(self, src_idx_l, cut_time_l, curr_layers, num_neighbors=20, edge_idx_preserve_list=None):
-        assert(curr_layers >= 0)
+    def tem_conv(self, src_idx_l, cut_time_l, curr_layers, edge_idx_preserve_list=None, candidate_weights_dict=None):
+        # import ipdb; ipdb.set_trace()
         
+        assert(curr_layers >= 0)
+
         device = self.n_feat_th.device
-    
         batch_size = len(src_idx_l)
         
         src_node_batch_th = torch.from_numpy(src_idx_l).long().to(device)
@@ -500,14 +510,17 @@ class TGAN(torch.nn.Module):
             src_node_conv_feat = self.tem_conv(src_idx_l, 
                                            cut_time_l,
                                            curr_layers=curr_layers - 1, 
-                                           num_neighbors=num_neighbors)
+                                           edge_idx_preserve_list=edge_idx_preserve_list,
+                                           candidate_weights_dict=candidate_weights_dict
+                                           )
             
             
             src_ngh_node_batch, src_ngh_eidx_batch, src_ngh_t_batch = self.ngh_finder.get_temporal_neighbor( 
                                                                     src_idx_l, 
                                                                     cut_time_l, 
-                                                                    num_neighbors=num_neighbors,
-                                                                    edge_idx_preserve_list=edge_idx_preserve_list)
+                                                                    num_neighbors=self.num_neighbors,
+                                                                    edge_idx_preserve_list=edge_idx_preserve_list,
+                                                                    )
 
             src_ngh_node_batch_th = torch.from_numpy(src_ngh_node_batch).long().to(device)
             src_ngh_eidx_batch = torch.from_numpy(src_ngh_eidx_batch).long().to(device)
@@ -520,9 +533,11 @@ class TGAN(torch.nn.Module):
             src_ngh_t_batch_flat = src_ngh_t_batch.flatten() #reshape(batch_size, -1)  
             src_ngh_node_conv_feat = self.tem_conv(src_ngh_node_batch_flat, 
                                                    src_ngh_t_batch_flat,
-                                                   curr_layers=curr_layers - 1, 
-                                                   num_neighbors=num_neighbors)
-            src_ngh_feat = src_ngh_node_conv_feat.view(batch_size, num_neighbors, -1)
+                                                   curr_layers=curr_layers - 1,
+                                                   edge_idx_preserve_list=edge_idx_preserve_list,
+                                                   candidate_weights_dict=candidate_weights_dict 
+                                                   )
+            src_ngh_feat = src_ngh_node_conv_feat.view(batch_size, self.num_neighbors, -1)
             
             # get edge time features and node features
             src_ngh_t_embed = self.time_encoder(src_ngh_t_batch_th)
@@ -531,7 +546,17 @@ class TGAN(torch.nn.Module):
             # attention aggregation
             mask = src_ngh_node_batch_th == 0
             attn_m = self.attn_model_list[curr_layers - 1]
-                        
+            
+            # support for explainer
+            if candidate_weights_dict is not None:
+                mask = mask.to(dtype=torch.float32)
+                event_idxs = candidate_weights_dict['candidate_events']
+                event_weights = candidate_weights_dict['edge_weights']
+                for i, e_idx in enumerate(event_idxs):
+                    indices = src_ngh_eidx_batch == e_idx
+                    mask[indices] = mask[indices] * event_weights[i]
+                
+            
             local, weight = attn_m(src_node_conv_feat, 
                                    src_node_t_embed,
                                    src_ngh_feat,

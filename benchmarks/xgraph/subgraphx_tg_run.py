@@ -6,9 +6,12 @@ from dig.xgraph.dataset.tg_dataset import load_tg_dataset
 from dig.xgraph.dataset.utils_dataset import construct_tgat_model_data
 from dig.xgraph.method.subgraphx_tg import SubgraphXTG
 from dig.xgraph.method.attn_explainer_tg import AttnExplainerTG
-from dig.xgraph.models.ext.tgat.module import TGAN
+from dig.xgraph.method.other_baselines_tg import PBOneExplainerTG, PGExplainerExt
 
+from dig.xgraph.models.ext.tgat.module import TGAN
 from dig import ROOT_DIR
+
+from utils import load_explain_idx
 
 
 @hydra.main(config_path='config', config_name='config')
@@ -18,13 +21,15 @@ def pipeline(config: DictConfig):
     # explainer config
     
     config.models.param = config.models.param[config.datasets.dataset_name]
-    config.datasets.dataset_path = str(ROOT_DIR/'xgraph'/'dataset'/'data'/f'{config.datasets.dataset_name}.csv')
     config.models.ckpt_path = str(ROOT_DIR/'xgraph'/'models'/'checkpoints'/f'{config.models.model_name}_{config.datasets.dataset_name}_best.pth')
-    config.explainers.param = config.explainers.param[config.datasets.dataset_name]
+
+    config.datasets.dataset_path = str(ROOT_DIR/'xgraph'/'dataset'/'data'/f'{config.datasets.dataset_name}.csv')
+    config.datasets.explain_idx_filepath = str(ROOT_DIR/'xgraph'/'dataset'/'explain_index'/f'{config.datasets.explain_idx_filename}.csv')
     
+    config.explainers.param = config.explainers.param[config.datasets.dataset_name]
     config.explainers.results_dir = str(ROOT_DIR.parent/'benchmarks'/'results')
     config.explainers.mcts_saved_dir = str(ROOT_DIR/'xgraph'/'saved_mcts_results')
-    config.explainers.mcts_saved_filename = f'{config.datasets.dataset_name}_{config.models.model_name}_{config.explainers.param.target_event_idx}.pt'
+    # config.explainers.mcts_saved_filename = f'{config.datasets.dataset_name}_{config.models.model_name}_{config.explainers.param.target_event_idx}_mcts_node_info.pt'
     print(OmegaConf.to_yaml(config))
 
     # import ipdb; ipdb.set_trace()
@@ -39,11 +44,16 @@ def pipeline(config: DictConfig):
 
 
     if config.models.model_name == 'tgat':
-        ngh_finder, node_feats, edge_feats = construct_tgat_model_data(events, config.datasets)
-        model = TGAN(ngh_finder, node_feats, edge_feats, num_layers=config.models.param.num_layers, 
-                    use_time=config.models.param.use_time, agg_method=config.models.param.agg_method, 
-                    attn_mode=config.models.param.attn_mode, seq_len=config.models.param.seq_len, 
-                    n_head=config.models.param.num_heads, drop_out=config.models.param.dropout)
+        ngh_finder, node_feats, edge_feats = construct_tgat_model_data(events, config.datasets.dataset_name)
+        model = TGAN(ngh_finder, node_feats, edge_feats,
+                     attn_mode=config.models.param.attn_mode,
+                     use_time=config.models.param.use_time,
+                     agg_method=config.models.param.agg_method,
+                     num_layers=config.models.param.num_layers, 
+                     n_head=config.models.param.num_heads,
+                     num_neighbors=config.models.param.num_neighbors, 
+                     drop_out=config.models.param.dropout
+                     )
     else: 
         raise NotImplementedError('To do.')
 
@@ -52,7 +62,8 @@ def pipeline(config: DictConfig):
     model.to(device)
 
     # import ipdb; ipdb.set_trace()
-    target_event_idx = config.explainers.param.target_event_idx
+    # target_event_idx = config.explainers.param.target_event_idx
+    target_event_idxs = load_explain_idx(config.datasets.explain_idx_filepath)
 
     if config.explainers.explainer_name == 'subgraphx_tg':
         explainer = SubgraphXTG(model, 
@@ -63,12 +74,12 @@ def pipeline(config: DictConfig):
                                 config.explainers.param.explanation_level, 
                                 device=device,
                                 save_results=config.explainers.results_save,
-                                save_dir=config.explainers.results_saved_dir,
-                                save_filename=config.explainers.results_saved_filename,
+                                mcts_saved_dir=config.explainers.mcts_saved_dir,
+                                # mcts_saved_filename=config.explainers.mcts_saved_filename,
                                 load_results=config.explainers.load_results,
                                 rollout=config.explainers.param.rollout,
+                                debug_mode=config.explainers.debug_mode
         )
-        
     elif config.explainers.explainer_name == 'attn_explainer_tg':
         explainer = AttnExplainerTG(
                                 model,
@@ -79,35 +90,67 @@ def pipeline(config: DictConfig):
                                 config.explainers.param.explanation_level, 
                                 device=device,
         )
-
-
+    elif config.explainers.explainer_name == 'pbone_explainer_tg':
+        explainer = PBOneExplainerTG(
+                                model,
+                                config.models.model_name,
+                                config.explainers.explainer_name,
+                                config.datasets.dataset_name,
+                                events,
+                                config.explainers.param.explanation_level, 
+                                device=device,
+        )
+    elif config.explainers.explainer_name == 'pg_explainer_tg':
+        config.explainers.explainer_ckpt_dir = str(ROOT_DIR/'xgraph'/'explainer_ckpts')
+        # /f'{config.models.model_name}_{config.datasets.dataset_name}_{config.explainers.explainer_name}_expl_ckpt.pt'
+        explainer = PGExplainerExt(
+                                model,
+                                config.models.model_name,
+                                config.explainers.explainer_name,
+                                config.datasets.dataset_name,
+                                events,
+                                config.explainers.param.explanation_level, 
+                                device=device,
+                                train_epochs=config.explainers.param.train_epochs,
+                                explainer_ckpt_dir=config.explainers.explainer_ckpt_dir,
+                                reg_coefs=config.explainers.param.reg_coefs,
+                                batch_size=config.explainers.param.batch_size,
+                                lr=config.explainers.param.lr,
+        )
 
     # run the explainer
     # target_event_idx = 9909
     # target_event_idx = 19
     # target_event_idx = 29
     
+    # import ipdb; ipdb.set_trace()
     # tree_results, tree_node_x = explainer(event_idx=target_event_idx)
-    e_idx_weight_list = explainer(event_idx=target_event_idx)
-    
+    explain_results = explainer(event_idxs=target_event_idxs)
+
     if config.explainers.explainer_name == 'subgraphx_tg':
         from dig.xgraph.evaluation.metrics_tg import EvaluatorMCTSTG
-        evaluator = EvaluatorMCTSTG() # TODO: fill params
-    elif config.explainers.explainer_name == 'attn_explainer_tg':
-        from dig.xgraph.evaluation.metrics_tg import EvaluatorAttenTG
-        evaluator = EvaluatorAttenTG(config.models.model_name,
-                                     config.explainers.explainer_name,
-                                     config.datasets.dataset_name,
-                                     explainer.ori_subgraph_df,
-                                     explainer.candidate_events,
-                                     explainer.tgnn_reward_wraper,
-                                     target_event_idx,
-                                     config.explainers.results_dir)
-
-    evaluator.evaluate(e_idx_weight_list)
-    exit(0)
-    # evaluate
+        evaluator = EvaluatorMCTSTG(model_name=config.models.model_name,
+                                    explainer_name=config.explainers.explainer_name,
+                                    dataset_name=config.datasets.dataset_name,
+                                    explainer=explainer,
+                                    results_dir=config.explainers.results_dir
+                                    ) 
+    elif config.explainers.explainer_name == 'attn_explainer_tg' or config.explainers.explainer_name == 'pbone_explainer_tg' \
+        or config.explainers.explainer_name == 'pg_explainer_tg':
     
+        from dig.xgraph.evaluation.metrics_tg import EvaluatorAttenTG
+        evaluator = EvaluatorAttenTG(model_name=config.models.model_name,
+                                    explainer_name=config.explainers.explainer_name,
+                                    dataset_name=config.datasets.dataset_name,
+                                    explainer=explainer,
+                                    results_dir=config.explainers.results_dir
+                                    ) # TODO: update
+
+    evaluator.evaluate(explain_results, target_event_idxs)
+    # import ipdb; ipdb.set_trace()
+    exit(0)
+
+    # evaluate
     import json
     sparsity = 0.0
     mcts_state_map = explainer.mcts_state_map if not config.explainers.load_results else None

@@ -1,36 +1,38 @@
 
-results_save: True
+results_save: False
 results_dir: ''
 mcts_saved_dir: ''
-# mcts_saved_filename: 'mcts_nodes_info'
+# mcts_saved_filename: ''
 load_results: False
 use_gpu: True
-explainer_name: 'subgraphx_tg'
+explainer_name: 'pg_explainer_tg'
+explainer_ckpt: ''
 debug_mode: False
 
 param:
   simulate:
     explanation_level: 'event'
-    # target_event_idx: 9909
     verbose: True
-    rollout: 1000
     tscore_coef: None
     beta: None
   simulate_v2:
     explanation_level: 'event'
-    # target_event_idx: 59
     verbose: True
-    rollout: 10
   garden_5:
     explanation_level: 'event'
-    # target_event_idx: 800
     verbose: True
-    rollout: 30
   wikipedia:
     explanation_level: 'event'
     verbose: True
-    rollout: 1000
-    tscore_coef: None
-    beta: None
+    train_epochs: 10
+    reg_coefs:
+      - 0.1
+      - 0.1
+    batch_size: 16
+    lr: 1e-4
+  reddit:
+    explanation_level: 'event'
+  
+
 
   

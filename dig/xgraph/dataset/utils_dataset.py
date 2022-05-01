@@ -1,3 +1,4 @@
+from typing import Union
 import torch
 import numpy as np
 from torch_geometric.data import Data, Dataset
@@ -91,13 +92,14 @@ def k_hop_temporal_subgraph(t_graph, num_hops, event_idx):
     assert center_node in subgraph_df.iloc[:, 0].values
     return subgraph_df
 
-def tgat_node_reindex(u, i, num_users):
+def tgat_node_reindex(u: Union[int, np.array], i: Union[int, np.array], num_users: int):
     u = u + 1
     i = i + 1 + num_users
+
     return u, i
 
 
-def construct_tgat_model_data(df, config_dataset):
+def construct_tgat_model_data(df, dataset_name):
     verify_dataframe(df)
 
     num_users = df['u'].max() + 1
@@ -112,8 +114,8 @@ def construct_tgat_model_data(df, config_dataset):
         adj_list[item].append((user, e_idx, time))
 
     neighbor_finder = NeighborFinder(adj_list, uniform=False) # default 'uniform' is False
-    edge_feats = np.load(ROOT_DIR/'xgraph'/'models'/'ext'/'tgat'/'processed'/f'ml_{config_dataset.dataset_name}.npy')
-    node_feats = np.load(ROOT_DIR/'xgraph'/'models'/'ext'/'tgat'/'processed'/f'ml_{config_dataset.dataset_name}_node.npy')
+    edge_feats = np.load(ROOT_DIR/'xgraph'/'models'/'ext'/'tgat'/'processed'/f'ml_{dataset_name}.npy')
+    node_feats = np.load(ROOT_DIR/'xgraph'/'models'/'ext'/'tgat'/'processed'/f'ml_{dataset_name}_node.npy')
     
 
     return neighbor_finder, node_feats, edge_feats

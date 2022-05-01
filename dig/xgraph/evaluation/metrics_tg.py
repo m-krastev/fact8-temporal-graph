@@ -1,184 +1,300 @@
+from ctypes import Union
 from typing import List
 import numpy as np
 from pandas import DataFrame
 from tqdm import tqdm
 from pathlib import Path
+from dig.xgraph.method.attn_explainer_tg import AttnExplainerTG
 
-from dig.xgraph.method.subgraphx_tg import MCTS, MCTSNode
+from dig.xgraph.method.subgraphx_tg import MCTS, BaseExplainerTG, MCTSNode, SubgraphXTG, base_and_important_events, base_and_unimportant_events
 from dig.xgraph.method.tg_score import TGNNRewardWraper
 
 
-def fidility_tg(ori_probs, unimportant_probs):
-    """
-    unimportant_probs: prediction with only searched unimportant events
-    Generally the larger the better.
-    """
-    res = ori_probs - unimportant_probs
-    return res
+# def fidelity_tg(ori_probs, unimportant_probs):
+#     """
+#     unimportant_probs: prediction with only searched unimportant events
+#     Generally the larger the better.
+#     """
+#     res = ori_probs - unimportant_probs
+#     return res
 
-def fidility_tg_inv(ori_probs, important_probs):
+def fidelity_inv_tg(ori_probs, important_probs):
     """
     important_probs: prediction with only searched important events
     Generally the smaller the better.
     """
-    res = ori_probs - important_probs
+    if ori_probs >= 0.5: # logit
+        # res = ori_probs - important_probs
+        res = important_probs - ori_probs
+    else: res = ori_probs - important_probs
+
     return res
 
 def sparsity_tg(tree_node: MCTSNode, candidate_number: int):
-    # candidate_events = mcts_object.candidate_events
-    # important_events = list(filter(lambda x: x in candidate_events_set_, tree_node.coalition))
-    important_events = tree_node.coalition
-    
-    return 1.0 - len(important_events) / candidate_number
+    # return 1.0 - len(tree_node.coalition) / candidate_number
+    return len(tree_node.coalition) / candidate_number
 
 class BaseEvaluator():
     def __init__(self, model_name: str, explainer_name: str, dataset_name: str, 
-                ori_subgraph_df: DataFrame, candidate_events: List, tgnn_reward_wraper: TGNNRewardWraper,
-                target_event_idx: int, results_dir=None
+                # ori_subgraph_df: DataFrame = None, candidate_events: List = None, tgnn_reward_wraper: TGNNRewardWraper = None,
+                # target_event_idx: int = None, 
+                explainer: BaseExplainerTG = None,
+                results_dir=None
     ) -> None:
         self.model_name = model_name
         self.dataset_name = dataset_name
         self.explainer_name = explainer_name
 
-        self.ori_subgraph_df = ori_subgraph_df
-        self.candidate_events = candidate_events
-        self.tgnn_reward_wraper = tgnn_reward_wraper
-        self.ori_pred = self.tgnn_reward_wraper.original_scores
+        self.explainer = explainer
 
-        self.target_event_idx = target_event_idx
         self.results_dir = results_dir
 
 
-
-    def _save_value_results(self, event_idx, value_results, suffix=None):
+    def _save_value_results(self, event_idxs, value_results, suffix=None):
         """save to a csv for plotting"""
-        if suffix is not None:
-            filename = Path(self.results_dir)/f'{self.model_name}_{self.dataset_name}_{event_idx}_{self.explainer_name}_{suffix}.csv'
-        else:
-            filename = Path(self.results_dir)/f'{self.model_name}_{self.dataset_name}_{event_idx}_{self.explainer_name}.csv'
-        
+        if isinstance(event_idxs, int):
+            if suffix is not None:
+                filename = Path(self.results_dir)/f'{self.model_name}_{self.dataset_name}_{event_idxs}_{self.explainer_name}_{suffix}.csv'
+            else:
+                filename = Path(self.results_dir)/f'{self.model_name}_{self.dataset_name}_{event_idxs}_{self.explainer_name}.csv'
+        elif isinstance(event_idxs, list):
+            if suffix is not None:
+                filename = Path(self.results_dir)/f'{self.model_name}_{self.dataset_name}_{event_idxs[0]}_to_{event_idxs[-1]}_{self.explainer_name}_{suffix}.csv'
+            else:
+                filename = Path(self.results_dir)/f'{self.model_name}_{self.dataset_name}_{event_idxs[0]}_to_{event_idxs[-1]}_{self.explainer_name}.csv'
+        else: raise ValueError
+
         df = DataFrame(value_results)
         df.to_csv(filename, index=False)
+        
         print(f'value results saved at {str(filename)}')
 
+    def _evaluate_one(self, single_results, event_idx):
+        raise NotImplementedError
+        
+    
+    def evaluate(self, explainer_results, event_idxs):
+        event_idxs_results = []
+        sparsity_results = []
+        fid_inv_results = []
+        fid_inv_best_results = []
 
+        print('\nevaluating...')
+        for i, (single_results, event_idx) in enumerate(zip(explainer_results, event_idxs)):
+            print(f'\nevaluate {i}th: {event_idx}')
+            self.explainer._initialize(event_idx)
 
-class EvaluatorAttenTG(BaseEvaluator):
-    def __init__(self, model_name: str, explainer_name: str, dataset_name: str, 
-                ori_subgraph_df: DataFrame, candidate_events: List, tgnn_reward_wraper: TGNNRewardWraper, 
-                target_event_idx: int, results_dir=None,
-        ) -> None:
-        super(EvaluatorAttenTG, self).__init__(model_name, explainer_name, dataset_name, 
-                                               ori_subgraph_df, candidate_events, tgnn_reward_wraper, target_event_idx, results_dir)
+            sparsity_list, fid_inv_list, fid_inv_best_list =  self._evaluate_one(single_results, event_idx)
 
-        self.base_events_ = None
-
-    @property
-    def base_events(self,):
-        if self.base_events_ is None:
-            candidate_events_ = set(self.candidate_events)
-            self.base_events_ = [e_idx for e_idx in self.ori_subgraph_df.index.values if e_idx not in candidate_events_]
-            return self.base_events_
-        else:
-            return self.base_events_
-
-    def evaluate(self, e_idx_weight_list):
-        """
-        return the fidelity at each sparsity
-        assume the `e_idx_weight_list` only has candidate e_idxs
-        """
-        assert len(self.candidate_events) == len(e_idx_weight_list)
-
-        sparsity_list = np.arange(1, 11, step=1) * 0.1
-        fid_inv_list = []
-        # base_events = 
-        for sparsity in sparsity_list:
-            num = int(sparsity * len(self.candidate_events))
-            important_events = [x[0] for x in e_idx_weight_list[:num+1] ] # (e_idx, weight)
-
-            base_and_important_events = self.base_events + important_events
-            important_pred = self.tgnn_reward_wraper._compute_gnn_score(base_and_important_events, self.target_event_idx)
-            fid_inv = important_pred - self.ori_pred
-            fid_inv_list.append(fid_inv)
-
-        fid_best = [ max(fid_inv_list[:i+1]) for i in range(0, len(fid_inv_list)) ]
+            # import ipdb; ipdb.set_trace()
+            event_idxs_results.extend([event_idx]*len(sparsity_list))
+            sparsity_results.extend(sparsity_list)
+            fid_inv_results.extend(fid_inv_list)
+            fid_inv_best_results.extend(fid_inv_best_list)
+        
         results = {
-            'sparsity': sparsity_list,
-            'fid_inv_best': fid_best,
-            'fid_inv_list': fid_inv_list,
+            'event_idx': event_idxs_results,
+            'sparsity': sparsity_results,
+            'fid_inv': fid_inv_results,
+            'fid_inv_best': fid_inv_best_results,
+            
         }
 
-        self._save_value_results(self.target_event_idx, results)
+        self._save_value_results(event_idxs, results)
         return results
 
 
 
-class EvaluatorMCTSTG(BaseEvaluator):
-    def __init__(self, tgnn_reward_wraper: TGNNRewardWraper, tree_results: List, sparsity: float, target_event_idx: int,
-        candidate_number: int = None, mcts_state_map: MCTS = None ) -> None:
-        self.tgnn_reward_wraper = tgnn_reward_wraper
-        self.mcts_state_map = mcts_state_map
-        self.tree_results = tree_results
-        self.candidate_number = candidate_number
-        self.sparsity = sparsity
-        self.ori_pred = self.tgnn_reward_wraper.original_scores
-        self.target_event_idx = target_event_idx
+class EvaluatorAttenTG(BaseEvaluator):
+    def __init__(self, model_name: str, explainer_name: str, dataset_name: str,
+                explainer: AttnExplainerTG,
+                results_dir=None,
+        ) -> None:
+        super(EvaluatorAttenTG, self).__init__(model_name=model_name,
+                                              explainer_name=explainer_name,
+                                              dataset_name=dataset_name,
+                                              results_dir=results_dir
+                                              )
+        self.explainer = explainer
+
+
+
     
-    def evaluate(self):
+    # SOLVED: why 0 in the first row of results csv? sparsity calculation is wrong
+    def _evaluate_one(self, single_results, event_idx):
+        candidates, candidate_weights = single_results
+
+        sparsity = np.arange(0, 10.5, step=0.5) * 0.1
+        candidate_events = self.explainer.candidate_events
+        candidate_num = len(candidate_events)
+        assert len(candidates) == candidate_num
+
+        fid_inv_list = []
+        for spar in sparsity:
+            num = int(spar * candidate_num)
+            important_events = candidates[:num+1]
+
+            b_i_events = self.explainer.base_events + important_events
+            important_pred = self.explainer.tgnn_reward_wraper._compute_gnn_score(b_i_events, event_idx)
+            ori_pred = self.explainer.tgnn_reward_wraper.original_scores
+            fid_inv = fidelity_inv_tg(ori_pred, important_pred)
+            fid_inv_list.append(fid_inv)
+            
+        # import ipdb; ipdb.set_trace()
+        fid_inv_best = array_best(fid_inv_list)
+
+        return sparsity, fid_inv_list, fid_inv_best
+
+
+def array_best(values):
+    if len(values) == 0:
+        return values
+    best_values = [values[0], ]
+    best = values[0]
+    for i in range(1, len(values)):
+        if best < values[i]:
+            best = values[i]
+        best_values.append(best)
+    return np.array(best_values)
+
+class EvaluatorMCTSTG(BaseEvaluator):
+    def __init__(self, 
+        model_name: str, explainer_name: str, dataset_name: str, 
+        explainer: SubgraphXTG,
+        # tgnn_reward_wraper: TGNNRewardWraper,
+        # base_events = None, candidate_events = None,
+        # sparsity: float, target_event_idx: int,
+        # mcts_state_map: MCTS = None 
+        results_dir = None
+        ) -> None:
+        super(EvaluatorMCTSTG, self).__init__(model_name=model_name,
+                                              explainer_name=explainer_name,
+                                              dataset_name=dataset_name,
+                                              results_dir=results_dir
+                                              )
+        self.explainer = explainer
+       
+    
+    def _evaluate_one(self, single_results, event_idx):
+        
+        tree_nodes, _ = single_results
         sparsity_list = []
         fid_inv_list = []
-        fid_list = []
-        score_list = []
-
-        print('evaluating...')
-
-        # for tree_node in tqdm(self.mcts_state_map.state_map.values(), total=len(self.mcts_state_map.state_map)):
-        for tree_node in tqdm(self.tree_results, total=len(self.tree_results)) :
+        
+        candidate_events = self.explainer.candidate_events
+        candidate_num = len(candidate_events)
+        for node in tqdm(tree_nodes, total=len(tree_nodes)):
             # import ipdb; ipdb.set_trace()
-            spar = sparsity_tg(tree_node, self.candidate_number)
-            if spar >= self.sparsity:
-                if self.mcts_state_map is not None:
-                    base_and_important_events = self.mcts_state_map.obtain_base_and_important_events(tree_node)
-                    important_pred = self.tgnn_reward_wraper._compute_gnn_score(base_and_important_events, self.target_event_idx)
-                    base_and_unimportant_events = self.mcts_state_map.obtain_base_and_unimportant_events(tree_node)
-                    unimportant_pred = self.tgnn_reward_wraper._compute_gnn_score(base_and_unimportant_events, self.target_event_idx)
+            spar = sparsity_tg(node, candidate_num)
 
-                    fid_inv = fidility_tg_inv(self.ori_pred, important_pred) # if positive sample, the smaller the better; if negative sample, the larger the better
-                    fid = fidility_tg(self.ori_pred, unimportant_pred) # if positive sampler, the larger the better; if negative sample, the smaller the better
-
-                    fid_inv_list.append(fid_inv)
-                    fid_list.append(fid)
-
-                # score_list.append( tree_node.Q() ) # TODO: difference?
-                score_list.append( tree_node.P )
-
-                sparsity_list.append(spar)
-
-        score_list = np.array(score_list)
-        sparsity_list = np.array(sparsity_list)
-
-        fid_inv_list = np.array(fid_inv_list)
-        fid_list = np.array(fid_list)
-
-        if self.mcts_state_map is not None:
-            fid_inv_best = fid_inv_list.min() * -1 if self.ori_pred > 0 else fid_inv_list.max() # the larger the better
-            fid_best = fid_list.max() * -1 if self.ori_pred > 0 else fid_list.min()  # the smaller the better
-        else:
-            fid_inv_best = None
-            fid_best = None
-
-        result_dict = {
-            'sparsity threshold': self.sparsity,
-            'sparsity avg': np.mean(sparsity_list),
-            # 'fidility- avg': np.mean(fid_inv_list),
-            # 'fidility+ avg': np.mean(fid_list),
-            'fidility- best': fid_inv_best,
-            'fidility+ best': fid_best,
-            'avg score': np.mean(score_list),
-            'best score': np.max(score_list),
-
+            b_i_events = self.explainer.base_events + node.coalition
+            important_pred = self.explainer.tgnn_reward_wraper._compute_gnn_score(b_i_events, event_idx)
+            # important_pred = node.P
             
-        }
+            ori_pred = self.explainer.tgnn_reward_wraper.original_scores
+            fid_inv = fidelity_inv_tg(ori_pred, important_pred) # the larger the better
+            
+            fid_inv_list.append(fid_inv)
+            sparsity_list.append(spar)
+        
+        sparsity_list = np.array(sparsity_list)
+        fid_inv_list = np.array(fid_inv_list)
+        
+        # sort according to sparsity
+        sort_idx = np.argsort(sparsity_list) # ascending of sparsity
+        sparsity_list = sparsity_list[sort_idx]
+        fid_inv_list = fid_inv_list[sort_idx]
+        fid_inv_best = array_best(fid_inv_list)
 
-        return result_dict
+        # import ipdb; ipdb.set_trace()
+        # only preserve a subset of results
+        indices = np.arange(0, len(sparsity_list)+1, 5)
+        indices = np.append(indices, len(sparsity_list)-1)
+        sparsity_list = sparsity_list[indices]
+        fid_inv_list = fid_inv_list[indices]
+        fid_inv_best = fid_inv_best[indices]
+
+        return sparsity_list, fid_inv_list, fid_inv_best
+
+    # def evaluate(self, explainer_results: List, event_idxs: List):
+    #     """
+    #     """
+    #     sparsity_results = []
+    #     fid_inv_results = []
+    #     fid_inv_best_results = []
+    #     # fid_list = []
+    #     # score_list = []
+
+    #     print('evaluating...')
+    #     # import ipdb; ipdb.set_trace()
+    #     for i, ((tree_nodes, _), event_idx) in enumerate(zip(explainer_results, event_idxs)):
+    #         print(f'evaluate {i}th: {event_idx}')
+    #         self.explainer._initialize(event_idx)
+
+    #         base_events = self.explainer.base_events
+    #         candidate_events = self.explainer.candidate_events
+    #         candidate_num = len(candidate_events)
+
+    #         sparsity_list = []
+    #         fid_inv_list = []
+    #         for node in tqdm(tree_nodes, total=len(tree_nodes)):
+    #             # import ipdb; ipdb.set_trace()
+    #             spar = sparsity_tg(node, candidate_num)
+    #             # b_i_events = base_and_important_events(base_events, candidate_events, node.coalition)
+    #             # b_ui_events = base_and_unimportant_events(base_events, candidate_events, node.coalition)
+    #             # important_pred = self.explainer.tgnn_reward_wraper._compute_gnn_score(b_i_events, event_idx)
+    #             # unimportant_pred = self.explainer.tgnn_reward_wraper._compute_gnn_score(b_ui_events, event_idx)
+    #             important_pred = node.P
+    #             ori_pred = self.explainer.tgnn_reward_wraper.original_scores
+    #             fid_inv = fidelity_inv_tg(ori_pred, important_pred) # if positive sample, the smaller the better; if negative sample, the larger the better
+    #             # fid = fidility_tg(self.ori_pred, unimportant_pred) # if positive sampler, the larger the better; if negative sample, the smaller the better
+                
+    #             fid_inv_list.append(fid_inv)
+    #             # fid_list.append(fid)
+
+    #             # score_list.append( tree_node.Q() ) # TODO: difference?
+    #             # score_list.append( tree_node.P )
+    #             sparsity_list.append(spar)
+            
+    #         sparsity_list = np.array(sparsity_list)
+    #         fid_inv_list = np.array(fid_inv_list)
+            
+    #         sort_idx = np.argsort(sparsity_list)
+    #         sparsity_list = sparsity_list[sort_idx]
+    #         fid_inv_list = fid_inv_list[sort_idx]
+    #         fid_inv_best = array_best(fid_inv_list)
+
+    #         # quantile indices, 0, 0.5, ..., 0.95, 1.0
+    #         # quantiles = np.quantile(sparsity_list, np.arange(0, 1.05, 0.05))
+    #         # indices = [(np.abs(sparsity_list - i)).argmax() for i in quantiles]
+    #         indices = np.arange(0, len(sparsity_list)+1, 5)
+    #         indices = np.append(indices, len(sparsity_list)-1)
+    #         sparsity_list = sparsity_list[indices]
+    #         fid_inv_list = fid_inv_list[indices]
+    #         fid_inv_best = fid_inv_best[indices]
+
+
+    #         sparsity_results.append(sparsity_list)
+    #         fid_inv_results.append(fid_inv_list)
+    #         fid_inv_best_results.append(fid_inv_best)
+
+
+
+    #     result_dict = {
+    #         'event_idx': [],
+    #         'sparsity': [],
+    #         'fid_inv': [],
+    #         'fid_inv_best': []
+    #     }
+
+    #     for i, e_idx in enumerate(event_idxs):
+    #         num = len(sparsity_results[i])
+    #         result_dict['event_idx'].extend([e_idx]*num )
+    #         result_dict['sparsity'].extend(sparsity_results[i])
+    #         result_dict['fid_inv'].extend(fid_inv_results[i])
+    #         result_dict['fid_inv_best'].extend(fid_inv_best_results[i])
+        
+    #     self._save_value_results(event_idxs, result_dict)
+
+    #     return result_dict
 

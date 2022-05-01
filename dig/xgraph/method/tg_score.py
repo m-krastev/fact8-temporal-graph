@@ -1,7 +1,45 @@
+from typing import Union
+from typing import List
 import numpy as np
+from pandas import DataFrame
 import torch.nn as nn
 
 from dig.xgraph.dataset.utils_dataset import tgat_node_reindex
+
+
+def _set_tgat_events_idxs(events_idxs):
+    """ supporter for tgat """
+    if isinstance(events_idxs, (int, np.int64)):
+        return events_idxs + 1
+    events_idxs_new = [ idx+1 for idx in events_idxs]
+    return events_idxs_new 
+
+def _set_tgat_data(all_events: DataFrame, n_users: int, target_event_idx: Union[int, List]):
+    """ supporter for tgat """
+    if isinstance(target_event_idx, (int, np.int64)):
+        target_u = all_events.iloc[target_event_idx, 0]
+        target_i = all_events.iloc[target_event_idx, 1]
+        target_t = all_events.iloc[target_event_idx, 2]
+        new_u, new_i = tgat_node_reindex(target_u, target_i, n_users)
+
+        src_idx_l = np.array([new_u, ])
+        target_idx_l = np.array([new_i, ])
+        cut_time_l = np.array([target_t, ])
+    elif isinstance(target_event_idx, list):
+        target_u = all_events.iloc[target_event_idx, 0].to_numpy()
+        target_i = all_events.iloc[target_event_idx, 1].to_numpy()
+        target_t = all_events.iloc[target_event_idx, 2].to_numpy()
+        new_u, new_i = tgat_node_reindex(target_u, target_i, n_users)
+
+        src_idx_l = new_u
+        target_idx_l = new_i
+        cut_time_l = target_t
+    else: 
+        raise ValueError
+
+    input_data = [src_idx_l, target_idx_l, cut_time_l]
+    return input_data
+
 
 class TGNNRewardWraper(object):
     def __init__(self, model, model_name, all_events, explanation_level):
@@ -19,54 +57,28 @@ class TGNNRewardWraper(object):
 
     #     pass
 
+
     
-    def _set_tgat_data(self, target_event_idx):
-        """ support for tgat """
-        # set the self.model itself, e.g., update its neighbor finder, node/edge feature set, etc.
-        # then construct model input data
-        # sub_events = self.all_events.iloc[events_idxs, :]
+    def _get_model_prob(self, target_event_idx, seen_events_idxs):
+        if self.model_name == 'tgat':
+            input_data = _set_tgat_data(self.all_events, self.n_users, target_event_idx)
+            seen_events_idxs = _set_tgat_events_idxs(seen_events_idxs) # NOTE: important
+            score = self.model.get_prob(*input_data, edge_idx_preserve_list=seen_events_idxs, logit=True)
+        else:
+            raise NotImplementedError
+        
+        return score.item()
 
-        # construct graph, rename nodes
-        # node features and edge features don't need to alter?
-
-
-        # subgraph_df = self.all_events.iloc[events_idxs, :]
-        # neig_finder, old_new_mapping = construct_tgat_neighbor_finder(subgraph_df, self.n_users)
-        # self.model.ngh_finder = neig_finder
-        # self.old_new_mapping = old_new_mapping
-        # cut_time_l = [self.all_events.iloc[target_event_idx, 2], ]
-        # src_idx_l = [old_new_mapping['user'][ self.all_events.iloc[target_event_idx, 0] ], ]
-        # target_idx_l = [old_new_mapping['item'][ self.all_events.iloc[target_event_idx, 1] ], ]
-
-        # src_idx_l = [self.all_events.iloc[target_event_idx, 0], ]
-        # target_idx_l = [self.all_events.iloc[target_event_idx, 1], ]
-        target_t = self.all_events.iloc[target_event_idx, 2]
-        target_u, target_i = self.all_events.iloc[target_event_idx, 0], self.all_events.iloc[target_event_idx, 1]
-        new_u, new_i = tgat_node_reindex(target_u, target_i, self.n_users)
-
-        src_idx_l = np.array([new_u, ])
-        target_idx_l = np.array([new_i, ])
-        cut_time_l = np.array([target_t, ])
-
-        input_data = [src_idx_l, target_idx_l, cut_time_l]
-        return input_data
 
     def compute_original_score(self, events_idxs, target_event_idx):
         """
-        `events_idx` acts as the original graph data (the root node of the MCTS).
-        # Generally it is a 3-hop temporal subgraph of the whole temporal graph.
-        Compute and store the original prediction of TGNNs.
+        events_idxs: could be seen by model
         """
         # self.sub_events = sub_events
         if self.model_name == 'tgat':
-            input_data = self._set_tgat_data(target_event_idx)
-            scores = self.model.get_prob(*input_data, edge_idx_preserve_list=events_idxs, logit=True)
-            self.original_scores = scores.item()
+            self.original_scores = self._get_model_prob(target_event_idx, events_idxs)
             self.orininal_size = len(events_idxs)
-            print('original score: ', self.original_scores)
-            # if self.explanation_level == 'event':
-            #     self.original_prediction = None
-            #     pass
+            # print('original score: ', self.original_scores)
         else:
             raise NotImplementedError
         
@@ -78,8 +90,7 @@ class TGNNRewardWraper(object):
         """
 
         if self.model_name == 'tgat':
-            input_data = self._set_tgat_data(target_event_idx)
-            scores = self.model.get_prob(*input_data, edge_idx_preserve_list=events_idxs, logit=True)
+            scores = self._get_model_prob(target_event_idx, events_idxs)
             # import ipdb; ipdb.set_trace()
             reward = self._compute_reward(scores, self.orininal_size-len(events_idxs))
             return reward
@@ -91,18 +102,10 @@ class TGNNRewardWraper(object):
 
     def _compute_gnn_score(self, events_idxs, target_event_idx):
         """
-        events_idxs the all the events' indices could be seen by the gnn model.
+        events_idxs the all the events' indices could be seen by the gnn model. idxs in the all_events space, not in the tgat space.
         target_event_idx is the target edge that we want to compute a gnn score by the temporal GNN model.
         """
-        if self.model_name == 'tgat':
-            input_data = self._set_tgat_data(target_event_idx)
-            scores = self.model.get_prob(*input_data, edge_idx_preserve_list=events_idxs, logit=True)
-            scores = scores.item()
-            return scores
-        elif self.model_name == 'abc':
-            pass
-
-        pass
+        return self._get_model_prob(target_event_idx, events_idxs)
 
         
     def _compute_reward(self, scores_petb, remove_size):
@@ -113,9 +116,9 @@ class TGNNRewardWraper(object):
         # import ipdb; ipdb.set_trace()
         # t1 = self.error(self.original_scores, scores_petb.item())
         if self.original_scores >= 0:
-            t1 = (scores_petb - self.original_scores).item()
+            t1 = scores_petb - self.original_scores
         else:
-            t1 = (self.original_scores - scores_petb).item()
+            t1 = self.original_scores - scores_petb
         
         t2 = remove_size
         # r = -1*t1 + -self.gamma * t2

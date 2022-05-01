@@ -10,6 +10,7 @@ import torch
 import pandas as pd
 import numpy as np
 #import numba
+from tqdm import tqdm
 
 from sklearn.metrics import average_precision_score
 from sklearn.metrics import f1_score
@@ -106,7 +107,7 @@ def eval_one_epoch(hint, tgan, sampler, src, dst, ts, label):
         TEST_BATCH_SIZE=30
         num_test_instance = len(src)
         num_test_batch = math.ceil(num_test_instance / TEST_BATCH_SIZE)
-        for k in range(num_test_batch):
+        for k in tqdm(range(num_test_batch), total=num_test_batch):
             # percent = 100 * k / num_test_batch
             # if k % int(0.2 * num_test_batch) == 0:
             #     logger.info('{0} progress: {1:10.4f}'.format(hint, percent))
@@ -120,7 +121,7 @@ def eval_one_epoch(hint, tgan, sampler, src, dst, ts, label):
             size = len(src_l_cut)
             src_l_fake, dst_l_fake = sampler.sample(size)
 
-            pos_prob, neg_prob = tgan.contrast(src_l_cut, dst_l_cut, dst_l_fake, ts_l_cut, NUM_NEIGHBORS)
+            pos_prob, neg_prob = tgan.contrast(src_l_cut, dst_l_cut, dst_l_fake, ts_l_cut)
             
             pred_score = np.concatenate([(pos_prob).cpu().numpy(), (neg_prob).cpu().numpy()])
             pred_label = pred_score > 0.5
@@ -255,13 +256,14 @@ np.random.shuffle(idx_list)
 
 early_stopper = EarlyStopMonitor()
 for epoch in range(NUM_EPOCH):
+    torch.cuda.empty_cache()
     # Training 
     # training use only training graph
     tgan.ngh_finder = train_ngh_finder
     acc, ap, f1, auc, m_loss = [], [], [], [], []
     np.random.shuffle(idx_list)
     logger.info('start {} epoch'.format(epoch))
-    for k in range(num_batch):
+    for k in tqdm(range(num_batch), total=num_batch):
         # percent = 100 * k / num_batch
         # if k % int(0.2 * num_batch) == 0:
         #     logger.info('progress: {0:10.4f}'.format(percent))
@@ -281,7 +283,7 @@ for epoch in range(NUM_EPOCH):
         
         optimizer.zero_grad()
         tgan = tgan.train()
-        pos_prob, neg_prob = tgan.contrast(src_l_cut, dst_l_cut, dst_l_fake, ts_l_cut, NUM_NEIGHBORS)
+        pos_prob, neg_prob = tgan.contrast(src_l_cut, dst_l_cut, dst_l_fake, ts_l_cut)
     
         loss = criterion(pos_prob, pos_label)
         loss += criterion(neg_prob, neg_label)
@@ -297,7 +299,7 @@ for epoch in range(NUM_EPOCH):
             acc.append((pred_label == true_label).mean())
             ap.append(average_precision_score(true_label, pred_score))
             # f1.append(f1_score(true_label, pred_label))
-            m_loss.append(loss.item())
+            m_loss.append(loss.cpu().detach().item())
             auc.append(roc_auc_score(true_label, pred_score))
 
     # validation phase use all information

@@ -9,7 +9,8 @@ from dig.xgraph.dataset.utils_dataset import k_hop_temporal_subgraph
 
 
 class AttnExplainerTG(BaseExplainerTG):
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, result_dir = None,
+    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
+                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, result_dir = None,
                 ):
         super(AttnExplainerTG, self).__init__(model=model,
                                               model_name=model_name,
@@ -46,33 +47,36 @@ class AttnExplainerTG(BaseExplainerTG):
 
 
     def explain(self, node_idx=None, event_idx=None):
-        
-        self._set_ori_subgraph(num_hops=3, event_idx=event_idx)
-        self._set_candidate_events(event_idx)
-        self._set_tgnn_wraper(event_idx)
-        
 
         # compute attention weights
         events_idxs = self.ori_subgraph_df.index.values.tolist()
         score = self.tgnn_reward_wraper._compute_gnn_score(events_idxs, event_idx)
 
         # aggregate attention weights
-        # import ipdb; ipdb.set_trace()
         atten_weights_list = self.model.atten_weights_list
         e_idx_weight_dict = self._agg_attention(atten_weights_list)
-        # e_idx_weight_list = [ (e_idx, w) for e_idx, w in sorted(e_idx_weight_dict.items(), key=lambda item:item[1], reverse=True) ] # descending order
 
-        return e_idx_weight_dict
-
-    def __call__(self, node_idx: Union[int, None] = None, event_idx: Union[int, None] = None):
-
-        results = self.explain(node_idx=node_idx, event_idx=event_idx)
-        # self._save_value_results(event_idx=event_idx, value_results=results)
-        e_idx_weight_list = []
-        for e_idx in self.candidate_events:
-            e_idx_weight_list.append((e_idx, results[e_idx]))
+        # TODO: note here is only for tgat!!!!
+        # TODO: the whole explain function may need to be altered to support other models, e.g., tgn
         
-        e_idx_weight_list = sorted(e_idx_weight_list, key=lambda x: x[1], reverse=True) # descending
+        new_e_idx_weight_dict = { key-1: e_idx_weight_dict[key] for key in e_idx_weight_dict.keys() } # NOTE: important, the keys in e_idx_weight_dict has been added 1 for tgat model.
 
-        return e_idx_weight_list
+        # import ipdb; ipdb.set_trace()
+        candidate_weights = { e_idx: new_e_idx_weight_dict[e_idx] for e_idx in self.candidate_events }
+        candidate_weights = dict( sorted(candidate_weights.items(), key=lambda x: x[1], reverse=True) ) # NOTE: descending, important
+
+
+        return candidate_weights
+
+    def __call__(self, node_idxs: Union[int, None] = None, event_idxs: Union[int, None] = None):
+        results_list = []
+        for i, event_idx in enumerate(event_idxs):
+            print(f'\nexplain {i}-th: {event_idx}')
+            self._initialize(event_idx)
+
+            candidate_weights = self.explain(event_idx=event_idx)
+            
+            results_list.append( [ list(candidate_weights.keys()), list(candidate_weights.values()) ] )
+        
+        return results_list
         

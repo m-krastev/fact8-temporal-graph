@@ -18,7 +18,7 @@ class NeighborFinder:
         self.off_set_l = off_set_l
         
         self.uniform = uniform
-        
+
     def init_off_set(self, adj_list):
         """
         Params
@@ -74,42 +74,35 @@ class NeighborFinder:
         if len(neighbors_idx) == 0 or len(neighbors_ts) == 0:
             return neighbors_idx, neighbors_ts, neighbors_e_idx
 
-        left = 0
-        right = len(neighbors_idx) - 1
+        # left = 0
+        # right = len(neighbors_idx) - 1
+
         
-        # while left + 1 < right: # ! binary search, not include cut_time
+        # while left + 1 < right: # ! binary search, include cut_time
         #     mid = (left + right) // 2
         #     curr_t = neighbors_ts[mid]
-        #     if curr_t < cut_time:
+        #     if curr_t <= cut_time:
         #         left = mid
         #     else:
         #         right = mid
             
-        # if neighbors_ts[left] >= cut_time:
-        #     end_point = left
-        # elif neighbors_ts[right] < cut_time:
+        # if neighbors_ts[right] <= cut_time:
         #     end_point = right + 1
+        # elif neighbors_ts[left] <= cut_time:
+        #     end_point = left + 1
         # else:
-        #     end_point = right
+        #     end_point = left
 
         
-        while left + 1 < right: # ! binary search, include cut_time
-            mid = (left + right) // 2
-            curr_t = neighbors_ts[mid]
-            if curr_t <= cut_time:
-                left = mid
-            else:
-                right = mid
-            
-        if neighbors_ts[right] <= cut_time:
-            end_point = right + 1
-        elif neighbors_ts[left] <= cut_time:
-            end_point = left + 1
-        else:
-            end_point = left
+        # indices = neighbors_ts <= cut_time
+        indices = neighbors_ts < cut_time # NOTE: important?
+
+        # import ipdb; ipdb.set_trace()
 
         
-        return neighbors_idx[:end_point], neighbors_e_idx[:end_point], neighbors_ts[:end_point]
+        # return neighbors_idx[:end_point], neighbors_e_idx[:end_point], neighbors_ts[:end_point]
+        # return neighbors_idx[:end_point], neighbors_e_idx[:end_point], neighbors_ts[:end_point]
+        return neighbors_idx[indices], neighbors_e_idx[indices], neighbors_ts[indices]
 
         # if neighbors_ts[right] < cut_time: # https://github.com/StatsDLMathsRecomSys/Inductive-representation-learning-on-temporal-graphs/issues/8
         #     return neighbors_idx[:right], neighbors_e_idx[:right], neighbors_ts[:right]
@@ -122,7 +115,6 @@ class NeighborFinder:
         ------
         src_idx_l: List[int]
         cut_time_l: List[float],
-        num_neighbors: int
         """
         assert(len(src_idx_l) == len(cut_time_l))
         
@@ -184,27 +176,27 @@ class NeighborFinder:
                     
         return out_ngh_node_batch, out_ngh_eidx_batch, out_ngh_t_batch
 
-    def find_k_hop(self, k, src_idx_l, cut_time_l, num_neighbors=20):
-        """Sampling the k-hop sub graph
-        """
-        x, y, z = self.get_temporal_neighbor(src_idx_l, cut_time_l, num_neighbors)
-        node_records = [x]
-        eidx_records = [y]
-        t_records = [z]
-        for _ in range(k -1):
-            ngn_node_est, ngh_t_est = node_records[-1], t_records[-1] # [N, *([num_neighbors] * (k - 1))]
-            orig_shape = ngn_node_est.shape
-            ngn_node_est = ngn_node_est.flatten()
-            ngn_t_est = ngh_t_est.flatten()
-            out_ngh_node_batch, out_ngh_eidx_batch, out_ngh_t_batch = self.get_temporal_neighbor(ngn_node_est, ngn_t_est, num_neighbors)
-            out_ngh_node_batch = out_ngh_node_batch.reshape(*orig_shape, num_neighbors) # [N, *([num_neighbors] * k)]
-            out_ngh_eidx_batch = out_ngh_eidx_batch.reshape(*orig_shape, num_neighbors)
-            out_ngh_t_batch = out_ngh_t_batch.reshape(*orig_shape, num_neighbors)
+    # def find_k_hop(self, k, src_idx_l, cut_time_l, num_neighbors=20):
+    #     """Sampling the k-hop sub graph
+    #     """
+    #     x, y, z = self.get_temporal_neighbor(src_idx_l, cut_time_l, num_neighbors)
+    #     node_records = [x]
+    #     eidx_records = [y]
+    #     t_records = [z]
+    #     for _ in range(k -1):
+    #         ngn_node_est, ngh_t_est = node_records[-1], t_records[-1] # [N, *([num_neighbors] * (k - 1))]
+    #         orig_shape = ngn_node_est.shape
+    #         ngn_node_est = ngn_node_est.flatten()
+    #         ngn_t_est = ngh_t_est.flatten()
+    #         out_ngh_node_batch, out_ngh_eidx_batch, out_ngh_t_batch = self.get_temporal_neighbor(ngn_node_est, ngn_t_est, num_neighbors)
+    #         out_ngh_node_batch = out_ngh_node_batch.reshape(*orig_shape, num_neighbors) # [N, *([num_neighbors] * k)]
+    #         out_ngh_eidx_batch = out_ngh_eidx_batch.reshape(*orig_shape, num_neighbors)
+    #         out_ngh_t_batch = out_ngh_t_batch.reshape(*orig_shape, num_neighbors)
 
-            node_records.append(out_ngh_node_batch)
-            eidx_records.append(out_ngh_eidx_batch)
-            t_records.append(out_ngh_t_batch)
-        return node_records, eidx_records, t_records
+    #         node_records.append(out_ngh_node_batch)
+    #         eidx_records.append(out_ngh_eidx_batch)
+    #         t_records.append(out_ngh_t_batch)
+    #     return node_records, eidx_records, t_records
 
             
 

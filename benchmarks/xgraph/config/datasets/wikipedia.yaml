@@ -1,0 +1,10 @@
+# simulated temporal graph dataset
+dataset_name: 'wikipedia'
+dataset_path: ''
+# node_feat_dim: 64
+# edge_feat_dim: 64
+# node_feat_zero: True
+# edge_feat_zero: True
+seed: 2
+explain_idx_filepath: ''
+explain_idx_filename: 'wikipedia'

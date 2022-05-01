@@ -8,7 +8,7 @@ param:
     use_time: 'time'
     agg_method: 'attn'
     attn_mode: 'prod'
-    seq_len: 20
+    num_neighbors: 20
     num_heads: 2
     dropout: 0.1
     uniform_sample_ngh: False
@@ -18,7 +18,7 @@ param:
     use_time: 'time'
     agg_method: 'attn'
     attn_mode: 'prod'
-    seq_len: 20
+    num_neighbors: 20
     num_heads: 2
     dropout: 0.1
     uniform_sample_ngh: False
@@ -28,7 +28,16 @@ param:
     use_time: 'time'
     agg_method: 'attn'
     attn_mode: 'prod'
-    seq_len: 20
+    num_neighbors: 20
+    num_heads: 2
+    dropout: 0.1
+    uniform_sample_ngh: False
+  wikipedia:
+    num_layers: 2
+    use_time: 'time'
+    agg_method: 'attn'
+    attn_mode: 'prod'
+    num_neighbors: 8
     num_heads: 2
     dropout: 0.1
     uniform_sample_ngh: False
