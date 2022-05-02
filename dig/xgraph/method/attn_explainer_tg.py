@@ -47,7 +47,6 @@ class AttnExplainerTG(BaseExplainerTG):
 
 
     def explain(self, node_idx=None, event_idx=None):
-
         # compute attention weights
         events_idxs = self.ori_subgraph_df.index.values.tolist()
         score = self.tgnn_reward_wraper._compute_gnn_score(events_idxs, event_idx)
@@ -58,7 +57,7 @@ class AttnExplainerTG(BaseExplainerTG):
 
         # TODO: note here is only for tgat!!!!
         # TODO: the whole explain function may need to be altered to support other models, e.g., tgn
-        
+        # import ipdb; ipdb.set_trace()
         new_e_idx_weight_dict = { key-1: e_idx_weight_dict[key] for key in e_idx_weight_dict.keys() } # NOTE: important, the keys in e_idx_weight_dict has been added 1 for tgat model.
 
         # import ipdb; ipdb.set_trace()

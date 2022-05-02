@@ -73,10 +73,9 @@ class PGExplainerExt(BaseExplainerTG):
             self._initialize(event_idx)
             candidate_weights = self.explain(event_idx=event_idx)
             results_list.append( [ list(candidate_weights.keys()), list(candidate_weights.values()) ] )
-        
+        import ipdb; ipdb.set_trace()
         return results_list
 
-    
     
     def _tg_predict(self, event_idx, use_explainer=False):
         if self.model_name == 'tgat':
@@ -198,7 +197,7 @@ class PGExplainerExt(BaseExplainerTG):
     def explain(self, node_idx=None, event_idx=None):
         input_expl = self._create_explainer_input(candidate_events=self.candidate_events, event_idx=event_idx)
         event_idx_scores = self.explainer_model(input_expl) # compute importance scores
-        event_idx_scores = event_idx_scores.cpu().detach().numpy()
+        event_idx_scores = event_idx_scores.cpu().detach().numpy().flatten()
 
         # the same as Attn explainer
         candidate_weights = { self.candidate_events[i]: event_idx_scores[i] for i in range(len(self.candidate_events)) }

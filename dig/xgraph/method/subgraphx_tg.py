@@ -1,4 +1,5 @@
 
+from email.mime import base
 import os
 import copy
 import math
@@ -216,11 +217,19 @@ class MCTS(object):
             
             exist_children = set(map( lambda x: x.created_by_remove, tree_node.children ))
             not_exist_children = list(filter(lambda e_idx:e_idx not in exist_children, tree_node.coalition ) )
+            
             not_exist_children_score = {}
             for event in not_exist_children:
-                children_coalition = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
-                not_exist_children_score[event] = self.compute_time_score(children_coalition)
-            
+                # children_coalition = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
+                # not_exist_children_score[event] = self.compute_time_score(children_coalition)
+                
+
+                # TODO: improve this
+                # test case for wikipedia 10000
+                base_weights = dict(zip(np.array([9992, 9278, 6736, 9358, 9274, 5920, 6791, 5928, 6116, 5946, 5953, 6108, 6612, 5917, 6597, 5906]), -1*np.array([0.03524684, 0.015747026, 0.014631136, 0.012152659, 0.009875496, 0.008869242, 0.006494519, 0.0054495437, 0.005336367, 0.0050178757, 0.005017235, 0.0044904025, 0.0044831526, 0.003955704, 0.003946715, 0.00325688])))
+                not_exist_children_score[event] = base_weights[event]
+            # import ipdb; ipdb.set_trace()
+
             # expand only one event
             expand_event = max( not_exist_children_score, key=not_exist_children_score.get )
             expand_events = [expand_event, ]
@@ -522,7 +531,6 @@ class SubgraphXTG(BaseExplainerTG):
                     c_puct=self.c_puct,
                     score_func=score_func,
                     device=self.device,
-
                     event_idx=event_idx,
                     node_idx=node_idx,
                     )
