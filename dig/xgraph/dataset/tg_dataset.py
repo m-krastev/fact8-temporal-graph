@@ -1,90 +1,168 @@
-from tabnanny import check
 import numpy as np
 import pandas as pd
+import argparse
 
-from sklearn.preprocessing import LabelEncoder
+from torch import positive
 
-def check_dataframe(df):
+from dig import ROOT_DIR
+
+def check_wiki_reddit_dataformat(df):
     assert df.iloc[:, 0].min() == 0
     assert df.iloc[:, 0].max() + 1 == df.iloc[:, 0].nunique() # 0, 1, 2, ...
     assert df.iloc[:, 1].min() == 0
     assert df.iloc[:, 1].max() + 1 == df.iloc[:, 1].nunique() # 0, 1, 2, ...
-
-    if len( df.columns.to_list() ) == 3:
-        assert df.columns.to_list() == ['u', 'i', 'ts']
-        df['label'] = np.ones((len(df), ))
-    elif len( df.columns.to_list() ) == 4:
-        assert df.columns.to_list() == ['u', 'i', 'ts', 'label']
-
-def verify_dataframe(df):
-    assert df.iloc[:, 0].min() == 0
-    assert df.iloc[:, 0].max() + 1 == df.iloc[:, 0].nunique()
-    assert df.iloc[:, 1].min() == 0
-    assert df.iloc[:, 1].max() + 1 == df.iloc[:, 1].nunique()
+    
     for col in ['u', 'i', 'ts', 'label']:
         assert col in df.columns.to_list()
 
 
+def verify_dataframe_unify(df):
+    for col in ['u', 'i', 'ts', 'label', 'e_idx', 'idx']:
+        assert col in df.columns.to_list()
+    
+    assert df.iloc[:, 0].min() == 1
+    assert df.iloc[:, 0].max() == df.iloc[:, 0].nunique()
+    assert df.iloc[:, 1].min() == df.iloc[:, 0].max() + 1
+    assert df.iloc[:, 1].max() == df.iloc[:, 0].max() + df.iloc[:, 1].nunique()
+    assert df['e_idx'].min() == 1
+    assert df['e_idx'].max() == len(df)
+    assert df['idx'].min() == 1
+    assert df['idx'].max() == len(df)
+
     
 def load_events_data(path):
     df = pd.read_csv(path)
-    check_dataframe(df)
+    verify_dataframe_unify(df)
     return df
 
-# def construct_adj(df, adj, cols):
-#     for grouo_id, group in df.groupby(by=[cols]):
-#         neighbors = group["index"].values
-#         count = len(neighbors)
-#         for i in range(count):
-#             for j in range(0, i):
-#                 #adj[neighbors[i],neighbors[j]] = 1
-#                 adj[neighbors[j],neighbors[i]] = 1
+# def unify_dataset_format(file):
+#     df = pd.read_csv(file)
+#     try:
+#         check_dataframe(df)
+#     except AssertionError:
+#         verify_dataframe_unify(df)
+#         print(f'{str(file)} already ok')
+#         exit(0)
 
-# def construct_line_graph(df):
-#     df.reset_index(inplace=True)
-#     n_event = len(df)
-#     line_graph = np.zeros((n_event, n_event))
-#     construct_adj(df, line_graph, "user") #连接相同user id的event
-#     construct_adj(df, line_graph, "item") #连接相同item id的event
-#     return line_graph
+#     df['i'] += df['u'].max() + 1
+#     df['u'] += 1
+#     df['i'] += 1
+#     df['e_idx'] = df.index.values + 1
 
-def _preprocess_tgat(df, node_feats, edge_feats):
-    df_new = df.copy()
-    df_new['u'] += 1
-    df_new['i'] += 1
-    df_new['i'] += df_new['u'].max()
-    node_feats = np.vstack([np.zeros((1, node_feats.shape[1])), node_feats])
-    edge_feats = np.vstack([np.zeros((1, edge_feats.shape[1])), edge_feats])
+#     verify_dataframe_unify(df)
 
-    return df_new, node_feats, edge_feats
+#     # save
+#     df.to_csv(file, index=False)
+#     print(f'{str(file)} ok')
 
+#     return df
 
-def load_tg_dataset(dataset_path, dataset_params=None, target_model='tgat'):
-    df = load_events_data(dataset_path)
+def load_tg_dataset(dataset_name):
+    data_dir = ROOT_DIR/'xgraph'/'models'/'ext'/'tgat'/'processed'
+    df = pd.read_csv(data_dir/f'ml_{dataset_name}.csv')
+    edge_feats = np.load(data_dir/f'ml_{dataset_name}.npy')
+    node_feats = np.load(data_dir/f'ml_{dataset_name}_node.npy')
 
-    n_users = df.iloc[:, 0].max() + 1
-    n_items = df.iloc[:, 1].max() + 1
-
-    print(f"#Dataset: {dataset_params.dataset_name}, #Users: {n_users}, #Items: {n_items}, #Interactions: {len(df)}, #Timestamps: {df.ts.nunique()}")
+    # df['e_idx'] = df.idx.values
     
-    # normalize time, need this? # TODO: need to consider this
-    # t_max = df.iloc[:, 2].max()
-    # df.iloc[:,2] = df.iloc[:,2]/t_max
+    verify_dataframe_unify(df)
+
+    assert df.i.max() + 1 == len(node_feats)
+    assert df.e_idx.max() + 1 == len(edge_feats)
+
+    # print
+    n_users = df.iloc[:, 0].max()
+    n_items = df.iloc[:, 1].max() - df.iloc[:, 0].max()
+    print(f"#Dataset: {dataset_name}, #Users: {n_users}, #Items: {n_items}, #Interactions: {len(df)}, #Timestamps: {df.ts.nunique()}")
+    print(f'#node feats shape: {node_feats.shape}, #edge feats shape: {edge_feats.shape}')
     
-    # time index, need this?
-    le = LabelEncoder()
-    df["time_index"] = le.fit_transform(df["ts"])
+    return df, edge_feats, node_feats
 
-    # if dataset_params.node_feat_zero is True:
-    #     node_feats = np.zeros((n_users+n_items, dataset_params.node_feat_dim))
-    # if dataset_params.edge_feat_zero is True:
-    #     edge_feats = np.zeros((len(df), dataset_params.edge_feat_dim))
+# def load_tg_dataset(dataset_path, dataset_params=None, target_model='tgat'):
+#     df = pd.read_csv(dataset_path)
+#     # check_dataframe(df)
+#     verify_dataframe_unify(df)
+
+#     # n_users = df.iloc[:, 0].max() + 1
+#     # n_items = df.iloc[:, 1].max() + 1
+#     n_users = df.iloc[:, 0].max()
+#     n_items = df.iloc[:, 1].max() - df.iloc[:, 0].max()
+
+#     print(f"#Dataset: {dataset_params.dataset_name}, #Users: {n_users}, #Items: {n_items}, #Interactions: {len(df)}, #Timestamps: {df.ts.nunique()}")
     
+#     # time index, need this?
+#     le = LabelEncoder()
+#     df["time_index"] = le.fit_transform(df["ts"])
 
-    # if target_model == 'tgat': # TODO: need to implement this in other places
-    #     node_feats, edge_feats = feature_process_tgat(node_feats, edge_feats)
+#     return df, n_users, n_items
 
-    verify_dataframe(df)
-    return df, n_users, n_items
+def load_explain_idx(explain_idx_filepath, start=0, end=None):
+    df = pd.read_csv(explain_idx_filepath)
+    event_idxs = df['event_idx'].to_list()
+    if end is not None:
+        event_idxs = event_idxs[start:end]
+    else: event_idxs = event_idxs[start:]
+    
+    print(f'{len(event_idxs)} events to explain')
+
+    return event_idxs
+
+
+
+def generate_explain_index(file, explainer_idx_dir, dataset_name):
+    df = pd.read_csv(file)
+    verify_dataframe_unify(df)
+    
+    size = 100
+
+    if dataset_name in ['simulate_v1', 'simulate_v2']:
+        positive_indices = df.label == 1
+        explain_idxs = np.random.choice(df[positive_indices].e_idx.values, size=size, replace=False)
+        import ipdb; ipdb.set_trace()
+    elif dataset_name in ['wikipedia', 'reddit']:
+
+        np.random.seed(1024)
+        e_num = len(df)
+        
+        # start_ratio = 0.7
+        # end_ratio = 0.8
+        start_ratio = 0.2
+        end_ratio = 0.6
+        low = int(e_num*start_ratio)
+        high = int(e_num*end_ratio)
+        # low = 10000
+        # high = 12000
+        explain_idxs = np.random.randint(low=low, high=high, size=size)
+
+    ############## save
+    explain_idxs = sorted(explain_idxs)
+    explain_idxs_dict = {
+        'event_idx': explain_idxs, 
+    }
+    explain_idxs_df = pd.DataFrame(explain_idxs_dict)
+    out_file = explainer_idx_dir/f'{dataset_name}.csv'
+    explain_idxs_df.to_csv(out_file, index=False)
+    print(f'explain index file {str(out_file)} saved')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-d', type=str, default='wikipedia')
+    parser.add_argument('-c', type=str, choices=['format', 'index'])
+    args = parser.parse_args()
+
+    data_dir = ROOT_DIR/'xgraph'/'models'/'ext'/'tgat'/'processed'
+    explainer_idx_dir = ROOT_DIR/'xgraph'/'dataset'/'explain_index'
+    file = data_dir/f'ml_{args.d}.csv'
+
+
+    if args.c == 'format':
+        # unify_dataset_format(file)
+        pass
+    elif args.c == 'index':
+        generate_explain_index(file, explainer_idx_dir, args.d)
+    else:
+        raise NotImplementedError
+
 
 
