@@ -1,5 +1,0 @@
-dataset_root: '/tmp/datasets'
-dataset_name: 'twitter'
-random_split_flag: False
-data_split_ratio: None
-seed: 2

@@ -3,41 +3,12 @@ model_name: 'tgat'
 
 ckpt_path: ''
 param:
-  # simulate:
-  #   num_layers: 2
-  #   use_time: 'time'
-  #   agg_method: 'attn'
-  #   attn_mode: 'prod'
-  #   num_neighbors: 20
-  #   num_heads: 2
-  #   dropout: 0.1
-  #   uniform_sample_ngh: False
-  #   # num_neigs_limit: 20
-  # simulate_v2:
-  #   num_layers: 2
-  #   use_time: 'time'
-  #   agg_method: 'attn'
-  #   attn_mode: 'prod'
-  #   num_neighbors: 20
-  #   num_heads: 2
-  #   dropout: 0.1
-  #   uniform_sample_ngh: False
-  #   # num_neigs_limit: 20
-  # garden_5:
-  #   num_layers: 2
-  #   use_time: 'time'
-  #   agg_method: 'attn'
-  #   attn_mode: 'prod'
-  #   num_neighbors: 20
-  #   num_heads: 2
-  #   dropout: 0.1
-  #   uniform_sample_ngh: False
   wikipedia:
     num_layers: 2
     use_time: 'time'
     agg_method: 'attn'
     attn_mode: 'prod'
-    num_neighbors: 8
+    num_neighbors: 10
     num_heads: 2
     dropout: 0.0
     uniform_sample_ngh: False
@@ -46,11 +17,20 @@ param:
     use_time: 'time'
     agg_method: 'attn'
     attn_mode: 'prod'
-    num_neighbors: 8
+    num_neighbors: 10
     num_heads: 2
     dropout: 0.0
     uniform_sample_ngh: False
   simulate_v1:
+    num_layers: 2
+    use_time: 'time'
+    agg_method: 'attn'
+    attn_mode: 'prod'
+    num_neighbors: 10
+    num_heads: 2
+    dropout: 0.0
+    uniform_sample_ngh: False
+  simulate_v2:
     num_layers: 2
     use_time: 'time'
     agg_method: 'attn'
