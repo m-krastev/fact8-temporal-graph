@@ -9,6 +9,7 @@ import argparse
 import torch
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 #import numba
 
 from sklearn.metrics import average_precision_score
@@ -18,7 +19,6 @@ from module import TGAN
 from graph import NeighborFinder
 from utils import EarlyStopMonitor, RandEdgeSampler
 from process import simulate_dataset_train_flag
-
 
 
 
@@ -107,7 +107,7 @@ def eval_one_epoch(hint, tgan, sampler, src, dst, ts, label):
         TEST_BATCH_SIZE=30
         num_test_instance = len(src)
         num_test_batch = math.ceil(num_test_instance / TEST_BATCH_SIZE)
-        for k in range(num_test_batch):
+        for k in tqdm(range(num_test_batch)):
             # percent = 100 * k / num_test_batch
             # if k % int(0.2 * num_test_batch) == 0:
             #     logger.info('{0} progress: {1:10.4f}'.format(hint, percent))
@@ -122,7 +122,7 @@ def eval_one_epoch(hint, tgan, sampler, src, dst, ts, label):
             # src_l_fake, dst_l_fake = sampler.sample(size)
 
             # pos_prob, neg_prob = tgan.contrast(src_l_cut, dst_l_cut, dst_l_fake, ts_l_cut, NUM_NEIGHBORS)
-            pos_prob = tgan.get_prob(src_l_cut, dst_l_cut, ts_l_cut, NUM_NEIGHBORS)
+            pos_prob = tgan.get_prob(src_l_cut, dst_l_cut, ts_l_cut)
             
             # pred_score = np.concatenate([(pos_prob).cpu().numpy(), (neg_prob).cpu().numpy()])
             pred_score = pos_prob.cpu().numpy()
@@ -135,6 +135,7 @@ def eval_one_epoch(hint, tgan, sampler, src, dst, ts, label):
             # val_ap.append(average_precision_score(true_label, pred_score))
             # val_f1.append(f1_score(true_label, pred_label))
             # val_auc.append(roc_auc_score(true_label, pred_score))
+    # import ipdb; ipdb.set_trace()
 
     assert len(val_acc) != 0
     # return np.mean(val_acc), np.mean(val_ap), np.mean(val_f1), np.mean(val_auc)
@@ -273,8 +274,9 @@ if torch.cuda.is_available():
 else:
     device = torch.device('cpu')
 tgan = TGAN(full_ngh_finder, n_feat, e_feat,
+            device=device,
             num_layers=NUM_LAYER, use_time=USE_TIME, agg_method=AGG_METHOD, attn_mode=ATTN_MODE,
-            seq_len=SEQ_LEN, n_head=NUM_HEADS, drop_out=DROP_OUT)
+            n_head=NUM_HEADS, drop_out=DROP_OUT, num_neighbors=NUM_NEIGHBORS)
 optimizer = torch.optim.Adam(tgan.parameters(), lr=LEARNING_RATE)
 criterion = torch.nn.BCELoss()
 tgan = tgan.to(device)
@@ -295,7 +297,10 @@ for epoch in range(NUM_EPOCH):
     acc, ap, f1, auc, m_loss = [], [], [], [], []
     np.random.shuffle(idx_list)
     logger.info('start {} epoch'.format(epoch))
-    for k in range(num_batch):
+    
+    # import ipdb; ipdb.set_trace()
+
+    for k in tqdm(range(num_batch)):
         # percent = 100 * k / num_batch
         # if k % int(0.2 * num_batch) == 0:
         #     logger.info('progress: {0:10.4f}'.format(percent))
@@ -318,14 +323,14 @@ for epoch in range(NUM_EPOCH):
         
         optimizer.zero_grad()
         tgan = tgan.train()
-        # pos_prob, neg_prob = tgan.contrast(src_l_cut, dst_l_cut, dst_l_fake, ts_l_cut, NUM_NEIGHBORS)
-        pos_prob = tgan.get_prob(src_l_cut, dst_l_cut, ts_l_cut, NUM_NEIGHBORS)
+        pos_prob = tgan.get_prob(src_l_cut, dst_l_cut, ts_l_cut)
     
         # loss = criterion(pos_prob, pos_label)
         # loss += criterion(neg_prob, neg_label)
         # import ipdb; ipdb.set_trace()
 
         loss = criterion(pos_prob, label_l_tensor)
+        # import ipdb; ipdb.set_trace()
         
         loss.backward()
         optimizer.step()
@@ -341,10 +346,10 @@ for epoch in range(NUM_EPOCH):
             true_label = np.array(label_l_cut, dtype=int)
 
             acc.append((pred_label == true_label).mean())
-            ap.append(average_precision_score(true_label, pred_score))
+            # ap.append(average_precision_score(true_label, pred_score))
             # f1.append(f1_score(true_label, pred_label))
             m_loss.append(loss.item())
-            auc.append(roc_auc_score(true_label, pred_score))
+            # auc.append(roc_auc_score(true_label, pred_score))
 
     # validation phase use all information
     # tgan.ngh_finder = full_ngh_finder
@@ -365,16 +370,16 @@ for epoch in range(NUM_EPOCH):
     # logger.info('train ap: {}, test ap: {}'.format(np.mean(ap), test_ap))
     # logger.info('train f1: {}, val f1: {}, new node val f1: {}'.format(np.mean(f1), val_f1, nn_val_f1))
 
-    if early_stopper.early_stop_check(test_acc):
-        logger.info('No improvment over {} epochs, stop training'.format(early_stopper.max_round))
-        logger.info(f'Loading the best model at epoch {early_stopper.best_epoch}')
-        best_model_path = get_checkpoint_path(early_stopper.best_epoch)
-        tgan.load_state_dict(torch.load(best_model_path))
-        logger.info(f'Loaded the best model at epoch {early_stopper.best_epoch} for inference')
-        tgan.eval()
-        break
-    else:
-        torch.save(tgan.state_dict(), get_checkpoint_path(epoch))
+    # if early_stopper.early_stop_check(test_acc):
+    #     logger.info('No improvment over {} epochs, stop training'.format(early_stopper.max_round))
+    #     logger.info(f'Loading the best model at epoch {early_stopper.best_epoch}')
+    #     best_model_path = get_checkpoint_path(early_stopper.best_epoch)
+    #     tgan.load_state_dict(torch.load(best_model_path))
+    #     logger.info(f'Loaded the best model at epoch {early_stopper.best_epoch} for inference')
+    #     tgan.eval()
+    #     break
+    # else:
+    torch.save(tgan.state_dict(), get_checkpoint_path(epoch))
 
 
 # testing phase use all information

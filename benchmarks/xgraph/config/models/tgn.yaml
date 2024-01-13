@@ -1,5 +1,5 @@
 model_saving_dir: ''
-model_name: 'tgat'
+model_name: 'tgn'
 
 ckpt_path: ''
 param:
@@ -22,40 +22,24 @@ param:
   #   num_heads: 2
   #   dropout: 0.1
   #   uniform_sample_ngh: False
-  #   # num_neigs_limit: 20
-  # garden_5:
-  #   num_layers: 2
-  #   use_time: 'time'
-  #   agg_method: 'attn'
-  #   attn_mode: 'prod'
-  #   num_neighbors: 20
-  #   num_heads: 2
-  #   dropout: 0.1
-  #   uniform_sample_ngh: False
   wikipedia:
     num_layers: 2
-    use_time: 'time'
-    agg_method: 'attn'
-    attn_mode: 'prod'
-    num_neighbors: 8
     num_heads: 2
     dropout: 0.0
-    uniform_sample_ngh: False
+    num_neighbors: 10
+    message_dimension: 100
+    memory_dimension: 172
   reddit:
     num_layers: 2
-    use_time: 'time'
-    agg_method: 'attn'
-    attn_mode: 'prod'
-    num_neighbors: 8
     num_heads: 2
     dropout: 0.0
-    uniform_sample_ngh: False
+    num_neighbors: 10
+    message_dimension: 100
+    memory_dimension: 172
   simulate_v1:
     num_layers: 2
-    use_time: 'time'
-    agg_method: 'attn'
-    attn_mode: 'prod'
-    num_neighbors: 10
     num_heads: 2
     dropout: 0.0
-    uniform_sample_ngh: False
+    num_neighbors: 10
+    message_dimension: 100
+    memory_dimension: 4

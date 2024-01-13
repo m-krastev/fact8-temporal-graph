@@ -44,8 +44,14 @@ class ScaledDotProductAttention(torch.nn.Module):
             if mask.dtype is torch.bool:
                 attn = attn.masked_fill(mask, -1e10)
             else:
-                attn = attn * mask
-                attn = attn.masked_fill(mask==0, -1e10) # stabilityz?
+                ###### version 1
+                attn = attn + mask
+
+                ###### version 2
+                # assert mask.max() <= 1 and mask.min() >= 0
+                # attn = attn * mask
+                # attn = attn.masked_fill(mask==0, -1e10) # stability?
+                
 
         attn = self.softmax(attn) # [n * b, l_q, l_k]
         attn = self.dropout(attn) # [n * b, l_v, d]
@@ -176,7 +182,7 @@ class MapBasedMultiHeadAttention(nn.Module):
         q_k = torch.cat([q, k], dim=3) # [(n*b), lq, lk, dk * 2]
         attn = self.weight_map(q_k).squeeze(dim=3) # [(n*b), lq, lk]
         
-        if mask is not None:
+        if mask is not None: # not used this
             attn = attn.masked_fill(mask, -1e10)
 
         attn = self.softmax(attn) # [n * b, l_q, l_k]
@@ -341,13 +347,13 @@ class AttnModel(torch.nn.Module):
                                              dropout=drop_out)
             self.logger.info('Using scaled prod attention')
             
-        elif attn_mode == 'map':
-            self.multi_head_target = MapBasedMultiHeadAttention(n_head, 
-                                             d_model=self.model_dim, 
-                                             d_k=self.model_dim // n_head, 
-                                             d_v=self.model_dim // n_head, 
-                                             dropout=drop_out)
-            self.logger.info('Using map based attention')
+        # elif attn_mode == 'map':
+        #     self.multi_head_target = MapBasedMultiHeadAttention(n_head, 
+        #                                      d_model=self.model_dim, 
+        #                                      d_k=self.model_dim // n_head, 
+        #                                      d_v=self.model_dim // n_head, 
+        #                                      dropout=drop_out)
+        #     self.logger.info('Using map based attention')
         else:
             raise ValueError('attn_mode can only be prod or map')
         
@@ -390,7 +396,7 @@ class AttnModel(torch.nn.Module):
 
 
 class TGAN(torch.nn.Module):
-    def __init__(self, ngh_finder: NeighborFinder, n_feat, e_feat,
+    def __init__(self, ngh_finder: NeighborFinder, n_feat, e_feat, device='cuda:0',
                  attn_mode='prod', use_time='time', agg_method='attn',
                  num_layers=2, n_head=4, null_idx=0, num_neighbors=20, drop_out=0.1):
         super(TGAN, self).__init__()
@@ -400,13 +406,13 @@ class TGAN(torch.nn.Module):
         self.null_idx = null_idx
         self.n_head = n_head
         self.num_neighbors = num_neighbors
+        self.device = device
         self.logger = logging.getLogger(__name__)
-        self.n_feat_th = torch.nn.Parameter(torch.from_numpy(n_feat.astype(np.float32)))
-        self.e_feat_th = torch.nn.Parameter(torch.from_numpy(e_feat.astype(np.float32)))
-        self.edge_raw_embed = torch.nn.Embedding.from_pretrained(self.e_feat_th, padding_idx=0, freeze=True)
-        self.node_raw_embed = torch.nn.Embedding.from_pretrained(self.n_feat_th, padding_idx=0, freeze=True)
+
+        self.node_raw_embed = torch.from_numpy(n_feat.astype(np.float32)).to(device)
+        self.edge_raw_embed = torch.from_numpy(e_feat.astype(np.float32)).to(device)
         
-        self.feat_dim = self.n_feat_th.shape[1] 
+        self.feat_dim = n_feat.shape[1] 
         
         self.n_feat_dim = self.feat_dim # NOTE: equal dime assumption
         self.e_feat_dim = self.feat_dim
@@ -414,7 +420,7 @@ class TGAN(torch.nn.Module):
         self.model_dim = self.feat_dim
         
         self.use_time = use_time
-        self.merge_layer = MergeLayer(self.feat_dim, self.feat_dim, self.feat_dim, self.feat_dim)
+        # self.merge_layer = MergeLayer(self.feat_dim, self.feat_dim, self.feat_dim, self.feat_dim)
         
         self.atten_weights_list = []
         if agg_method == 'attn':
@@ -443,6 +449,7 @@ class TGAN(torch.nn.Module):
             self.logger.info('Using time encoding')
             self.time_encoder = TimeEncode(expand_dim=self.t_feat_dim)
         elif use_time == 'pos':
+            raise NotImplementedError
             seq_len = self.num_neighbors # NOTE: altered
             assert(seq_len is not None)
             self.logger.info('Using positional encoding')
@@ -493,7 +500,7 @@ class TGAN(torch.nn.Module):
         
         assert(curr_layers >= 0)
 
-        device = self.n_feat_th.device
+        device = self.device
         batch_size = len(src_idx_l)
         
         src_node_batch_th = torch.from_numpy(src_idx_l).long().to(device)
@@ -502,7 +509,7 @@ class TGAN(torch.nn.Module):
         cut_time_l_th = torch.unsqueeze(cut_time_l_th, dim=1)
         # query node always has the start time -> time span == 0
         src_node_t_embed = self.time_encoder(torch.zeros_like(cut_time_l_th))
-        src_node_feat = self.node_raw_embed(src_node_batch_th)
+        src_node_feat = self.node_raw_embed[src_node_batch_th, :]
         
         if curr_layers == 0:
             return src_node_feat
@@ -541,20 +548,39 @@ class TGAN(torch.nn.Module):
             
             # get edge time features and node features
             src_ngh_t_embed = self.time_encoder(src_ngh_t_batch_th)
-            src_ngn_edge_feat = self.edge_raw_embed(src_ngh_eidx_batch)
+            src_ngn_edge_feat = self.edge_raw_embed[src_ngh_eidx_batch, :]
 
             # attention aggregation
             mask = src_ngh_node_batch_th == 0
             attn_m = self.attn_model_list[curr_layers - 1]
             
+            # import ipdb; ipdb.set_trace()
             # support for explainer
             if candidate_weights_dict is not None:
-                mask = mask.to(dtype=torch.float32)
                 event_idxs = candidate_weights_dict['candidate_events']
                 event_weights = candidate_weights_dict['edge_weights']
+
+
+                ###### version 1, event_weights not [0, 1]
+                position0 = src_ngh_node_batch_th == 0
+                mask = torch.zeros_like(src_ngh_node_batch_th).to(dtype=torch.float32) # NOTE: for +, 0 mean no influence
+                # import ipdb; ipdb.set_trace()
                 for i, e_idx in enumerate(event_idxs):
                     indices = src_ngh_eidx_batch == e_idx
-                    mask[indices] = mask[indices] * event_weights[i]
+                    mask[indices] = event_weights[i]
+                mask[position0] = -1e10 # addition attention, as 0 masks
+                # import ipdb; ipdb.set_trace()
+
+
+                ###### version 2, event_weights [0, 1]
+                # assert event_weights.max() <= 1 and event_weights.min() >= 0
+                # position0 = src_ngh_node_batch_th == 0
+                # mask = torch.ones_like(src_ngh_node_batch_th).to(dtype=torch.float32) # NOTE: for *, 1 mean no influence
+                # for i, e_idx in enumerate(event_idxs):
+                #     indices = src_ngh_eidx_batch == e_idx
+                #     mask[indices] = event_weights[i]
+                # mask[position0] = 0
+
                 
             
             local, weight = attn_m(src_node_conv_feat, 

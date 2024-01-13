@@ -1,28 +1,23 @@
 
-from email.mime import base
 import os
 import copy
 import math
 import time
-import itertools
+import random
+from path import Path
 from sklearn.utils import shuffle
-from tqdm import tqdm
 import torch
 import numpy as np
 import networkx as nx
 import pandas as pd
 from pandas import DataFrame
-from typing import Union
-from functools import partial
-from typing import List, Tuple, Dict
-from torch_geometric.data import Batch, Data
+from typing import Union, Optional
 from typing import Callable, Union, Optional
-
+from tqdm import tqdm
 
 from dig import ROOT_DIR
-from dig.xgraph.models.ext.tgat.module import TGAN
-from dig.xgraph.method.tg_score import TGNNRewardWraper
-from dig.xgraph.dataset.utils_dataset import k_hop_temporal_subgraph
+from dig.xgraph.method.base_explainer_tg import BaseExplainerTG
+from dig.xgraph.method.other_baselines_tg import _create_explainer_input
 
 
 def to_networkx_tg(events: DataFrame):
@@ -40,43 +35,42 @@ def to_networkx_tg(events: DataFrame):
 
 def print_nodes(tree_nodes):
     print('\nSearched tree nodes (preserved edge idxs in candidates):')
-    for node in tree_nodes:
+    for i, node in enumerate(tree_nodes):
         # preserved_events = preserved_candidates(node.coalition, ori_event_idxs, candidates_idxs)
         # removed_idxs = obtain_removed_idxs(node.coalition, self.ori_subgraph_df.index.to_list())
         # preserved_events_gnn_score = self.tgnn_reward_wraper(preserved_events, event_idx)
-        print(sorted(node.coalition), ': ', node.P)
+        print(i, sorted(node.coalition), ': ', node.P)
 
-def find_best_node_result(results):
+def find_best_node_result(all_nodes, min_atoms=6):
     """ return the highest reward tree_node with its subgraph is smaller than max_nodes """
-    results = sorted(results, key=lambda x: len(x.coalition))
+    all_nodes = filter( lambda x: len(x.coalition) <= min_atoms, all_nodes ) # filter using the min_atoms
+    best_node = max(all_nodes, key=lambda x: x.P)
+    return best_node
 
-    result_node = results[0]
-    for result_idx in range(len(results)):
-        x = results[result_idx]
-        # if len(x.coalition) <= max_nodes and x.P > result_node.P:
-        if x.P > result_node.P:
-            result_node = x
-    return result_node
+    # all_nodes = sorted(all_nodes, key=lambda x: len(x.coalition))
+    # result_node = all_nodes[0]
+    # for result_idx in range(len(all_nodes)):
+    #     x = all_nodes[result_idx]
+    #     # if len(x.coalition) <= max_nodes and x.P > result_node.P:
+    #     if x.P > result_node.P:
+    #         result_node = x
+    # return result_node
 
 
 class MCTSNode(object):
-    def __init__(self, coalition: list = None, data: Data = None, created_by_remove: int = None, 
-                #  ori_graph: nx.Graph = None,
-                 c_puct: float = 10.0, W: float = 0, N: int = 0, P: float = 0,
-                 load_dict: Optional[Dict] = None):
-        self.data = data # node data or edge data? or subgraph data? ignore now.
+    def __init__(self, coalition: list = None, created_by_remove: int = None, 
+                 c_puct: float = 10.0, W: float = 0, N: int = 0, P: float = 0, Sparsity: float = 1,
+                 ):
         self.coalition = coalition  # in our case, the coalition should be edge indices?
-        # self.ori_graph = ori_graph
-        # self.device = device
         self.c_puct = c_puct
         self.children = []
         self.created_by_remove = created_by_remove # created by remove which edge from its parents
         self.W = W  # sum of node value
         self.N = N  # times of arrival
         self.P = P  # property score (reward)
+        self.Sparsity = Sparsity # len(self.coalition)/len(candidates)
 
-        if load_dict is not None:
-            self.load_info(load_dict)
+    
 
     def Q(self):
         return self.W / self.N if self.N > 0 else 0
@@ -88,22 +82,25 @@ class MCTSNode(object):
     @property
     def info(self):
         info_dict = {
-            # 'data': self.data.to('cpu'),
             'coalition': self.coalition,
-            # 'ori_graph': self.ori_graph,
+            'created_by_remove': self.created_by_remove,
+            'c_puct': self.c_puct,
             'W': self.W,
             'N': self.N,
-            'P': self.P
+            'P': self.P,
+            'Sparsity': self.Sparsity,
         }
         return info_dict
 
     def load_info(self, info_dict):
+        self.coalition = info_dict['coalition']
+        self.created_by_remove = info_dict['created_by_remove']
+        self.c_puct = info_dict['c_puct']
         self.W = info_dict['W']
         self.N = info_dict['N']
         self.P = info_dict['P']
-        self.coalition = info_dict['coalition']
-        # self.ori_graph = info_dict['ori_graph']
-        # self.data = info_dict['data'].to(self.device)
+        self.Sparsity = info_dict['Sparsity']
+
         self.children = []
         return self
 
@@ -140,16 +137,15 @@ class MCTS(object):
         node_idx (:obj:`int`): The target node index to extract the neighborhood.
         score_func (:obj:`Callable`): The reward function for tree node, such as mc_shapely and mc_l_shapely.
     """
-    def __init__(self, events: DataFrame,
-                 candidate_events = None,
-                 base_events = None,
-                 num_users: int = None,
+    def __init__(self, events: DataFrame, candidate_events = None, base_events = None, candidate_initial_weights = None,
+                 node_idx: int = None, event_idx: int = None,
                  n_rollout: int = 10, min_atoms: int = 5, c_puct: float = 10.0,
-                #  expand_atoms: int = 14,
-                 node_idx: int = None, event_idx: int = None, score_func: Callable = None, device='cpu'):
+                 score_func: Callable = None, 
+                #  device='cpu'
+                 ):
         
         self.events = events # subgraph events or total events? subgraph events
-        self.num_users = num_users
+        # self.num_users = num_users
         self.subgraph_num_nodes = self.events.iloc[:, 0].nunique() + self.events.iloc[:, 1].nunique()
         # self.graph = to_networkx_tg(events)
         # self.node_X = node_X # node features
@@ -163,11 +159,12 @@ class MCTS(object):
         # self.candidate_events = [10, 11, 12, 13, 14, 15, 19]
         self.candidate_events = candidate_events
         self.base_events = base_events
+        self.candidate_initial_weights = candidate_initial_weights
 
         # we only care these events, other events are preserved as is.
         # currently only take 10 temporal edges into consideration.
         
-        self.device = device
+        # self.device = device
         self.num_nodes = self.events.iloc[:, 0].nunique() + self.events.iloc[:, 1].nunique()
 
 
@@ -179,11 +176,11 @@ class MCTS(object):
         # self.expand_atoms = expand_atoms
         # self.high2low = high2low
         self.new_node_idx = None
-        self.data = None
+        # self.data = None
 
-        self.MCTSNodeClass = partial(MCTSNode, data=self.data, 
-                                     c_puct=self.c_puct
-                                     )
+        # self.MCTSNodeClass = partial(MCTSNode,
+        #                              c_puct=self.c_puct,
+        #                              )
 
 
         self._initialize_tree()
@@ -197,17 +194,14 @@ class MCTS(object):
             'best_reward': [],
             'num_states': []
         }
-    
-    
-    
 
     def mcts_rollout(self, tree_node):
         """
         The tree_node now is a set of events
         """
         # import ipdb; ipdb.set_trace()
-        if len( tree_node.coalition ) < self.min_atoms:
-        # if len(current_graph_coalition) <= len(self.events) - len(self.candidate_events):
+        # if len( tree_node.coalition ) < self.min_atoms:
+        if len( tree_node.coalition ) < 1:
             return tree_node.P # its score
         
         # Expand if this node has never been visited
@@ -218,21 +212,17 @@ class MCTS(object):
             exist_children = set(map( lambda x: x.created_by_remove, tree_node.children ))
             not_exist_children = list(filter(lambda e_idx:e_idx not in exist_children, tree_node.coalition ) )
             
-            not_exist_children_score = {}
-            for event in not_exist_children:
-                # children_coalition = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
-                # not_exist_children_score[event] = self.compute_time_score(children_coalition)
-                
+            expand_events = self._select_expand_candidates(not_exist_children)
 
-                # TODO: improve this
-                # test case for wikipedia 10000
-                base_weights = dict(zip(np.array([9992, 9278, 6736, 9358, 9274, 5920, 6791, 5928, 6116, 5946, 5953, 6108, 6612, 5917, 6597, 5906]), -1*np.array([0.03524684, 0.015747026, 0.014631136, 0.012152659, 0.009875496, 0.008869242, 0.006494519, 0.0054495437, 0.005336367, 0.0050178757, 0.005017235, 0.0044904025, 0.0044831526, 0.003955704, 0.003946715, 0.00325688])))
-                not_exist_children_score[event] = base_weights[event]
-            # import ipdb; ipdb.set_trace()
-
-            # expand only one event
-            expand_event = max( not_exist_children_score, key=not_exist_children_score.get )
-            expand_events = [expand_event, ]
+            # not_exist_children_score = {}
+            # for event in not_exist_children:
+            #     children_coalition = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
+            #     not_exist_children_score[event] = self.compute_action_score(children_coalition, expand_event=event)
+            # # expand only one event
+            # # expand_event = max( not_exist_children_score, key=not_exist_children_score.get )
+            # expand_event = min( not_exist_children_score, key=not_exist_children_score.get ) # NOTE: min
+            
+            # expand_events = [expand_events[0], ]
 
             for event in expand_events:
                 important_events = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
@@ -247,7 +237,15 @@ class MCTS(object):
                         break
                 
                 if not find_same:
-                    new_tree_node = self.MCTSNodeClass(important_events, created_by_remove=event)
+                    # new_tree_node = self.MCTSNodeClass(
+                    #     coalition=important_events, created_by_remove=event)
+                    new_tree_node = MCTSNode(
+                        coalition=important_events,
+                        created_by_remove=event,
+                        c_puct=self.c_puct,
+                        Sparsity=len(important_events)/len(self.candidate_events)
+                        )
+
                     self.state_map[subnode_coalition_key] = new_tree_node
                 
                 # find same child ?
@@ -256,13 +254,17 @@ class MCTS(object):
                     if self._node_key(child.coalition) == self._node_key(new_tree_node.coalition):
                         find_same_child = True
                         break
-                
-                # expand new childrens
                 if not find_same_child:
                     tree_node.children.append(new_tree_node)
+
+                # coutinue until one valid child is expanded, otherewize this rollout will be wasted
+                if not find_same:
+                    break
+                else: continue
             
             # compute scores of all children
             scores = compute_scores(self.score_func, self.base_events, tree_node.children, self.event_idx)
+            # import ipdb; ipdb.set_trace()
             for child, score in zip(tree_node.children, scores):
                 child.P = score
 
@@ -272,38 +274,54 @@ class MCTS(object):
         sum_count = sum([c.N for c in tree_node.children])
         # import ipdb; ipdb.set_trace()
         # selected_node = max(tree_node.children, key=lambda x: x.Q() + x.U(sum_count))
-        selected_node = max(tree_node.children, key=lambda x: self.compute_node_score(x, sum_count))
-
+        selected_node = max(tree_node.children, key=lambda x: self._compute_node_score(x, sum_count))
         
         v = self.mcts_rollout(selected_node)
         selected_node.W += v
         selected_node.N += 1
         return v
     
-    def compute_time_score(self, coalition):
-        beta = 3
-        ts = self.events['ts'][coalition].values # np array
-        delta_ts = self.curr_t - ts
-        t_score_exp = np.exp( beta * -1 * delta_ts)
-        t_score_exp = np.sum( t_score_exp )
-        return t_score_exp
+    def _select_expand_candidates(self, not_exist_children):
+        assert self.candidate_initial_weights is not None
+        return sorted(not_exist_children, key=self.candidate_initial_weights.get)
+
+        
+        if self.candidate_initial_weights is not None:
+            # return min(not_exist_children, key=self.candidate_initial_weights.get)
+            
+            # v1
+            if np.random.random() > 0.5:
+                return min(not_exist_children, key=self.candidate_initial_weights.get)
+            else:
+                return np.random.choice(not_exist_children)
+            
+            # v2
+            # return sorted(not_exist_children, key=self.candidate_initial_weights.get) # ascending
+            
+
+        else:
+            # return np.random.choice(not_exist_children)
+            # return sorted(not_exist_children)[0]
+            return shuffle(not_exist_children)
 
     
-    def compute_node_score(self, node, sum_count):
+    def _compute_node_score(self, node, sum_count):
         """
-        node score computation strategy
+        score for selecting a path
         """
         # import ipdb; ipdb.set_trace()
         # time score
         # tscore_eff = -10 # 0.1
-        tscore_coef = 0.1 # -100, -50, -10, -5, -1, 0, 0.5
+        # tscore_coef = 0.1 # -100, -50, -10, -5, -1, 0, 0.5
+        tscore_coef = 0
+        beta = -3
 
-        beta = 3
         max_event_idx = max(self.root.coalition)
-        curr_t = self.events['ts'][max_event_idx]
-        ts = self.events['ts'][node.coalition].values # np array
+        curr_t = self.events['ts'][max_event_idx-1]
+        ts = self.events['ts'][self.events.e_idx.isin(node.coalition)].values
+        # np.array(node.coalition)-1].values # np array
         delta_ts = curr_t - ts
-        t_score_exp = np.exp( beta * -1 * delta_ts)
+        t_score_exp = np.exp( beta * delta_ts)
         t_score_exp = np.sum( t_score_exp )
 
         # uct score
@@ -331,7 +349,9 @@ class MCTS(object):
             # record
             self.recorder['rollout'].append(rollout_idx)
             self.recorder['runtime'].append(elapsed_time)
-            self.recorder['best_reward'].append( np.max(list(map(lambda x: x.P, self.state_map.values()))) )
+            # self.recorder['best_reward'].append( np.max(list(map(lambda x: x.P, self.state_map.values()))) )
+            curr_best_node = find_best_node_result(self.state_map.values(), self.min_atoms)
+            self.recorder['best_reward'].append( curr_best_node.P )
             self.recorder['num_states'].append( len(self.state_map) )
 
         end_time = time.time()
@@ -345,151 +365,32 @@ class MCTS(object):
         # reset the search tree
         # self.root_coalition = self.events.index.values.tolist()
         self.root_coalition = copy.copy( self.candidate_events )
-        self.root = self.MCTSNodeClass(self.root_coalition)
+        self.root = MCTSNode(self.root_coalition, created_by_remove=-1, c_puct=self.c_puct, Sparsity=1.0)
         self.root_key = self._node_key(self.root_coalition)
         self.state_map = {self.root_key: self.root}
 
         max_event_idx = max(self.root.coalition)
-        self.curr_t = self.events['ts'][max_event_idx]
+        self.curr_t = self.events['ts'][self.events.e_idx==max_event_idx].values[0]
 
     def _node_key(self, coalition):
         return "_".join(map(lambda x: str(x), sorted(coalition) ) ) # NOTE: have sorted
     
 
-class BaseExplainerTG(object):
-    def __init__(self, model: Union[TGAN, None], model_name: str, explainer_name: str, dataset_name: str, all_events: str, explanation_level: str, device, 
-                verbose: bool = True, results_dir: Optional[str] = None, debug_mode: bool=True) -> None:
-        """
-        results_dir: dir for saving value results, e.g., fidelity_sparsity. Not mcts_node_list
-        """
-        self.model = model
-        self.model_name = model_name
-        self.explainer_name = explainer_name # self's name
-        self.dataset_name = dataset_name
-        self.all_events = all_events
-        self.num_users = all_events.iloc[:, 0].max() + 1
-        self.explanation_level = explanation_level
-        
-        self.device = device
-        self.verbose = verbose
-        self.results_dir = results_dir
-        self.debug_mode = debug_mode
-        
-        self.model.eval()
-        self.model.to(self.device)
-
-        # construct TGNN reward function
-        self.tgnn_reward_wraper = TGNNRewardWraper(self.model, self.model_name, self.all_events, self.explanation_level)
-
-    def find_candidates(self, target_event_idx):
-        # TODO: implementation for other models
-        from dig.xgraph.dataset.utils_dataset import tgat_node_reindex
-        from dig.xgraph.method.tg_score import _set_tgat_events_idxs # NOTE: important
-        _set_tgat_events_idxs
-        if self.model_name == 'tgat':
-            ngh_finder = self.model.ngh_finder
-            num_layers = self.model.num_layers
-            num_neighbors = self.model.num_neighbors # NOTE: important
-            edge_idx_preserve_list = _set_tgat_events_idxs( self.ori_subgraph_df.index.values.tolist() ) # NOTE: important, make sure in the tgat space.
-            # import ipdb; ipdb.set_trace()
-
-            u = self.all_events.iloc[target_event_idx, 0]
-            i = self.all_events.iloc[target_event_idx, 1]
-            ts = self.all_events.iloc[target_event_idx, 2]
-
-            new_u, new_i = tgat_node_reindex(u, i, self.num_users)
-            # accu_e_idx = [ [target_event_idx+1, target_event_idx+1]] # NOTE: for subsequent '-1' operation
-            accu_e_idx = [ ] # NOTE: important?
-            accu_node = [ [new_u, new_i,] ]
-            accu_ts = [ [ts, ts,] ]
-            
-            for i in range(num_layers):
-                last_nodes = accu_node[-1]
-                last_ts = accu_ts[-1]
-                # import ipdb; ipdb.set_trace()
-
-                out_ngh_node_batch, out_ngh_eidx_batch, out_ngh_t_batch = ngh_finder.get_temporal_neighbor(
-                                                                                    last_nodes, 
-                                                                                    last_ts, 
-                                                                                    num_neighbors=num_neighbors,
-                                                                                    edge_idx_preserve_list=edge_idx_preserve_list,
-                                                                                    )
-                
-                out_ngh_node_batch = out_ngh_node_batch.flatten()
-                out_ngh_eidx_batch = out_ngh_eidx_batch.flatten()
-                out_ngh_t_batch = out_ngh_t_batch.flatten()
-                
-                mask = out_ngh_node_batch != 0
-                out_ngh_node_batch = out_ngh_node_batch[mask]
-                out_ngh_eidx_batch = out_ngh_eidx_batch[mask]
-                out_ngh_t_batch = out_ngh_t_batch[mask]
-
-                # import ipdb; ipdb.set_trace()
-
-                out_ngh_node_batch = out_ngh_node_batch.tolist()
-                out_ngh_t_batch = out_ngh_t_batch.tolist()
-                out_ngh_eidx_batch = (out_ngh_eidx_batch).tolist() 
-
-                accu_node.append(out_ngh_node_batch)
-                accu_ts.append(out_ngh_t_batch)
-                accu_e_idx.append(out_ngh_eidx_batch)
-
-            unique_e_idx = np.array(list(itertools.chain.from_iterable(accu_e_idx)))
-            unique_e_idx = unique_e_idx[ unique_e_idx != 0 ] # NOTE: 0 are padded e_idxs
-            unique_e_idx = unique_e_idx - 1 # NOTE: -1, because ngh_finder stored +1 e_idxs
-            unique_e_idx = np.unique(unique_e_idx).tolist()
-            
-            
-        else:
-            raise NotImplementedError
-        
-        candidate_events = unique_e_idx
-        threshold_num = 20
-        if len(candidate_events) > threshold_num:
-            candidate_events = candidate_events[-threshold_num:]
-            candidate_events = sorted(candidate_events)
-        
-        if self.debug_mode:
-            print(f'{len(unique_e_idx)} seen events, used {len(candidate_events)} as candidates:')
-            print(candidate_events)
-        
-        return candidate_events
-    
-    def _set_ori_subgraph(self, num_hops, event_idx):
-        subgraph_df = k_hop_temporal_subgraph(self.all_events, num_hops=num_hops, event_idx=event_idx)
-        self.ori_subgraph_df = subgraph_df
-
-
-    def _set_candidate_events(self, event_idx):
-        self.candidate_events = self.find_candidates(event_idx)
-        # self.candidate_events = shuffle( candidate_events ) # strategy 1
-        # self.candidate_events = candidate_events # strategy 2
-        # self.candidate_events.reverse()
-        # self.candidate_events = candidate_events # strategy 3
-        candidate_events_set_ = set(self.candidate_events)
-        assert hasattr(self, 'ori_subgraph_df')
-        self.base_events = list(filter(lambda x: x not in candidate_events_set_, self.ori_subgraph_df.index.values.tolist())) # NOTE: ori_subgraph_df
-
-    def _set_tgnn_wraper(self, event_idx):
-        assert hasattr(self, 'ori_subgraph_df')
-        self.tgnn_reward_wraper.compute_original_score(self.ori_subgraph_df.index.values.tolist(), event_idx)
-    
-    def _initialize(self, event_idx):
-        self._set_ori_subgraph(num_hops=3, event_idx=event_idx)
-        self._set_candidate_events(event_idx)
-        self._set_tgnn_wraper(event_idx)
 
 
 class SubgraphXTG(BaseExplainerTG):
     """
     MCTS based temporal graph GNN explainer
     """
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None,
-                 rollout: int = 20, min_atoms: int = 1, c_puct: float = 150.0,
-                 expand_atoms=14,
-                 load_results=False, mcts_saved_dir: Optional[str] = None, save_results: bool= True,
-                 debug_mode: bool = True
-                 ):
+
+    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, 
+                verbose: bool = True, results_dir = None, debug_mode: bool = True,
+                # specific params
+                rollout: int = 20, min_atoms: int = 1, c_puct: float = 10.0,
+                # expand_atoms=14,
+                load_results=False, mcts_saved_dir: Optional[str] = None, save_results: bool= True,
+                pg_explainer_model=None, pg_positive=True,
+                ):
 
         super(SubgraphXTG, self).__init__(model=model, 
                                           model_name=model_name,
@@ -514,77 +415,49 @@ class SubgraphXTG(BaseExplainerTG):
         self.mcts_saved_dir = mcts_saved_dir # dir for saving mcts nodes, not evaluation results ( e.g., fidelity )
         # self.mcts_saved_filename = mcts_saved_filename
         self.save = save_results
+        self.pg_explainer_model = pg_explainer_model # to assign initial weights using a trained pg_explainer_tg
+        self.pg_positive = pg_positive
+        self.suffix = self._path_suffix(pg_explainer_model, pg_positive)
 
-
-    def get_mcts_class(self, events, event_idx: int = None, node_idx: int = None, score_func: Callable = None, candidate_events=None,
-                        base_events=None,
-    ):
-        # if self.explanation_level == 'event':
-        #     pass
-        
-        return MCTS(events=events,
-                    candidate_events=candidate_events,
-                    base_events=base_events,
-                    num_users=self.num_users,
-                    n_rollout=self.rollout,
-                    min_atoms=self.min_atoms,
-                    c_puct=self.c_puct,
-                    score_func=score_func,
-                    device=self.device,
-                    event_idx=event_idx,
-                    node_idx=node_idx,
-                    )
-
-
-    # @staticmethod
     def read_from_MCTSInfo_list(self, MCTSInfo_list):
         if isinstance(MCTSInfo_list[0], dict):
             ret_list = [MCTSNode().load_info(node_info) for node_info in MCTSInfo_list]
-        else: raise NotImplementedError
-        # elif isinstance(MCTSInfo_list[0][0], dict):
-        #     ret_list = []
-        #     for single_label_MCTSInfo_list in MCTSInfo_list:
-        #         single_label_ret_list = [MCTSNode(device=self.device).load_info(node_info) for node_info in single_label_MCTSInfo_list]
-        #         ret_list.append(single_label_ret_list)
+        else: 
+            raise NotImplementedError
         return ret_list
 
     def write_from_MCTSNode_list(self, MCTSNode_list):
         if isinstance(MCTSNode_list[0], MCTSNode):
             ret_list = [node.info for node in MCTSNode_list]
-        else: raise NotImplementedError
-        # elif isinstance(MCTSNode_list[0][0], MCTSNode):
-        #     ret_list = []
-        #     for single_label_MCTSNode_list in MCTSNode_list:
-        #         single_label_ret_list = [node.info for node in single_label_MCTSNode_list]
-        #         ret_list.append(single_label_ret_list)
+        else: 
+            raise NotImplementedError
         return ret_list
-    
-    def _saved_file_path(self, event_idx):
-        filename = f"{self.model_name}_{self.dataset_name}_{event_idx}_mcts_node_info.pt"
-        path = os.path.join(self.mcts_saved_dir, filename)
-        return path
 
     def explain(self,
                 node_idx: Optional[int] = None,
                 time: Optional[float] = None,
                 event_idx: Optional[int] = None,
                 ):
-        
-        
         # support event-level first
         if self.explanation_level == 'node':
+            raise NotImplementedError
             # node_idx + event_idx?
-            pass
 
         elif self.explanation_level == 'event': # we now only care node/edge(event) level explanations, graph-level explanation is temporarily suspended
             assert event_idx is not None
-            
-
             # search
-            self.mcts_state_map = self.get_mcts_class(events=self.ori_subgraph_df, event_idx=event_idx, 
-                                                      candidate_events=self.candidate_events, 
-                                                      base_events=self.base_events,
-                                                      score_func=self.tgnn_reward_wraper)
+            self.mcts_state_map = MCTS(events=self.ori_subgraph_df,
+                                       candidate_events=self.candidate_events,
+                                       base_events=self.base_events,
+                                       node_idx=node_idx, 
+                                       event_idx=event_idx,
+                                       n_rollout=self.rollout,
+                                       min_atoms=self.min_atoms,
+                                       c_puct=self.c_puct,
+                                       score_func=self.tgnn_reward_wraper,
+                                    #    device=self.device,
+                                       candidate_initial_weights=self.candidate_initial_weights, # BUG: never pass through this parameter?????
+                                    )
             
             if self.debug_mode:
                 print('search graph:')
@@ -594,49 +467,124 @@ class SubgraphXTG(BaseExplainerTG):
 
         else: raise NotImplementedError('Wrong explanaion level')
 
-        tree_node_x = find_best_node_result(tree_nodes)
+        tree_node_x = find_best_node_result(tree_nodes, self.min_atoms)
         tree_nodes = sorted(tree_nodes, key=lambda x:x.P)
 
-        print_nodes(tree_nodes)
+        if self.debug_mode:
+            print_nodes(tree_nodes)
 
         return tree_nodes, tree_node_x
     
+    @staticmethod
+    def _path_suffix(pg_explainer_model, pg_positive):
+        if pg_explainer_model is not None:
+            suffix = 'pg_true'
+        else:
+            suffix = 'pg_false'
+        
+        if pg_explainer_model is not None:
+            if pg_positive is True:
+                suffix += '_pg_positive'
+            else:
+                suffix += '_pg_negative'
+        
+        return suffix
+        
+
+    @staticmethod
+    def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix):
+        if suffix is not None:
+            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{suffix}.csv'
+        else:
+            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder.csv'
+        
+        return record_filename
+    
+    @staticmethod
+    def _mcts_node_info_path(node_info_dir, model_name, dataset_name, event_idx, suffix):
+        if suffix is not None:
+            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{suffix}.pt"
+        else:
+            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info.pt"
+
+        return nodeinfo_filename
+
+    def _save_mcts_recorder(self, event_idx):
+        # save records
+        recorder_df = pd.DataFrame(self.mcts_state_map.recorder)
+        record_filename = self._mcts_recorder_path(ROOT_DIR.parent/'benchmarks'/'results', self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
+        recorder_df.to_csv(record_filename, index=False)
+
+        print(f'mcts recorder saved at {str(record_filename)}')
+    
+    def _save_mcts_nodes_info(self, tree_nodes, event_idx):
+        saved_contents = {
+            'saved_MCTSInfo_list': self.write_from_MCTSNode_list(tree_nodes),
+        }
+        path = self._mcts_node_info_path(self.mcts_saved_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
+        torch.save(saved_contents, path)
+        print(f'results saved at {path}')
+    
     def _load_saved_nodes_info(self, event_idx):
-        path = self._saved_file_path(event_idx)
+        path = self._mcts_node_info_path(self.mcts_saved_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
         assert os.path.isfile(path)
         saved_contents = torch.load(path)
         
         saved_MCTSInfo_list = saved_contents['saved_MCTSInfo_list']
         tree_nodes = self.read_from_MCTSInfo_list(saved_MCTSInfo_list)
-        tree_node_x = find_best_node_result(tree_nodes)
+        tree_node_x = find_best_node_result(tree_nodes, self.min_atoms)
 
         return tree_nodes, tree_node_x
+
+    def _set_candidate_weights(self, event_idx):
+        # save candidates' initial weights computed by the pg_explainer_tg
+        from dig.xgraph.method.tg_score import _set_tgat_data
+        from dig.xgraph.method.attn_explainer_tg import AttnExplainerTG
+
+        candidate_events = self.candidate_events
+
+        self.pg_explainer_model.eval() # mlp
+        input_expl = _create_explainer_input(self.model, self.model_name, self.all_events, \
+                    candidate_events=self.candidate_events, event_idx=event_idx, device=self.device)
         
-    def _save_mcts_nodes_info(self, tree_nodes, event_idx):
-        saved_contents = {
-            # 'candidate_events': self.mcts_state_map.candidate_events,
-            'saved_MCTSInfo_list': self.write_from_MCTSNode_list(tree_nodes),
-            # 'original_scores': self.tgnn_reward_wraper.original_scores,
-            # 'ori_subgraph_df': self.ori_subgraph_df
-        }
-        path = self._saved_file_path(event_idx)
-        torch.save(saved_contents, path)
-        print(f'results saved at {path}')
-
-    def _save_mcts_recorder(self,):
-        # save records
-        recorder_df = pd.DataFrame(self.mcts_state_map.recorder)
-        record_filename = ROOT_DIR.parent/'benchmarks'/'results'/f'{self.model_name}_{self.dataset_name}_{self.mcts_state_map.event_idx}_mcts_recorder.csv'
-        recorder_df.to_csv(record_filename, index=False)
-        print(f'mcts recorder saved at {str(record_filename)}')
+        edge_weights = self.pg_explainer_model(input_expl) # compute importance scores
+        # event_idx_scores = event_idx_scores.cpu().detach().numpy().flatten()
 
 
-    def __call__(self, node_idxs: Union[int, None] = None, event_idxs: Union[int, None] = None):
+        ################### added to original model attention scores
+        candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
+                                    'edge_weights': edge_weights,
+                }
+        src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(self.all_events, event_idx)
+        output = self.model.get_prob( src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
+        e_idx_weight_dict = AttnExplainerTG._agg_attention(self.model, self.model_name)
+        edge_weights = np.array([ e_idx_weight_dict[e_idx] for e_idx in candidate_events ])
+        ################### added to original model attention scores
+
+        if not self.pg_positive:
+            edge_weights = -1 * edge_weights
+        
+        # import ipdb; ipdb.set_trace()
+
+        # event_idx_scores = np.random.random(size=(len(event_idx_scores,))) # ??
+        candidate_initial_weights = { candidate_events[i]: edge_weights[i] for i in range(len(candidate_events)) }
+        self.candidate_initial_weights = candidate_initial_weights
+
+    def _initialize(self, event_idx):
+        super(SubgraphXTG, self)._initialize(event_idx)
+        if self.pg_explainer_model is not None: # use pg model 
+            self._set_candidate_weights(event_idx)
+
+
+    def __call__(self, node_idxs: Union[int, None] = None, event_idxs: Union[int, None] = None, return_dict=None, device=None):
         """
         Args:
             node_idxs: the target node index to explain for node prediction tasks
             event_idxs: the target event index to explain for edge prediction tasks
         """
+        self.model.eval()
+        if device is not None:
+            self._to_device(device)
 
         if isinstance(event_idxs, int):
             event_idxs = [event_idxs, ]
@@ -651,11 +599,38 @@ class SubgraphXTG(BaseExplainerTG):
             else:
                 tree_nodes, tree_node_x = self.explain(event_idx=event_idx,
                                                     )
-                self._save_mcts_recorder() # always store
+                self._save_mcts_recorder(event_idx) # always store
                 if self.save and not self.load_results: # sometimes store
                     self._save_mcts_nodes_info(tree_nodes, event_idx)
             
-            results_list.append([tree_nodes, tree_node_x])
+            result = [tree_nodes, tree_node_x]
+            results_list.append(result)
+            
+            if return_dict is not None:
+                return_dict[event_idx] = result
 
         return results_list
         # return tree_nodes, tree_node_x
+
+    def _to_device(self, device):
+        pass
+        # if torch.cuda.is_available():
+        #     device = torch.device('cuda', index=device)
+        # else:
+        #     device = torch.device('cpu')
+        
+        # self.device = device
+        # self.model.device = device
+        # self.model.to(device)
+
+        # if self.model_name == 'tgat':
+        #     self.model.node_raw_embed = self.model.node_raw_embed.to(device)
+        #     self.model.edge_raw_embed = self.model.edge_raw_embed.to(device)
+        #     pass
+        # elif self.model_name == 'tgn':
+        #     self.model.node_raw_features = self.model.node_raw_features.to(device)
+        #     self.model.edge_raw_features = self.model.edge_raw_features.to(device)
+
+        # import ipdb; ipdb.set_trace()
+
+

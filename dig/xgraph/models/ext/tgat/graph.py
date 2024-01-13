@@ -125,6 +125,7 @@ class NeighborFinder:
         for i, (src_idx, cut_time) in enumerate(zip(src_idx_l, cut_time_l)):
             ngh_idx, ngh_eidx, ngh_ts = self.find_before(src_idx, cut_time)
             # import ipdb; ipdb.set_trace()
+            
             # if i == 1:
             #     import ipdb; ipdb.set_trace()
 
@@ -176,27 +177,7 @@ class NeighborFinder:
                     
         return out_ngh_node_batch, out_ngh_eidx_batch, out_ngh_t_batch
 
-    # def find_k_hop(self, k, src_idx_l, cut_time_l, num_neighbors=20):
-    #     """Sampling the k-hop sub graph
-    #     """
-    #     x, y, z = self.get_temporal_neighbor(src_idx_l, cut_time_l, num_neighbors)
-    #     node_records = [x]
-    #     eidx_records = [y]
-    #     t_records = [z]
-    #     for _ in range(k -1):
-    #         ngn_node_est, ngh_t_est = node_records[-1], t_records[-1] # [N, *([num_neighbors] * (k - 1))]
-    #         orig_shape = ngn_node_est.shape
-    #         ngn_node_est = ngn_node_est.flatten()
-    #         ngn_t_est = ngh_t_est.flatten()
-    #         out_ngh_node_batch, out_ngh_eidx_batch, out_ngh_t_batch = self.get_temporal_neighbor(ngn_node_est, ngn_t_est, num_neighbors)
-    #         out_ngh_node_batch = out_ngh_node_batch.reshape(*orig_shape, num_neighbors) # [N, *([num_neighbors] * k)]
-    #         out_ngh_eidx_batch = out_ngh_eidx_batch.reshape(*orig_shape, num_neighbors)
-    #         out_ngh_t_batch = out_ngh_t_batch.reshape(*orig_shape, num_neighbors)
-
-    #         node_records.append(out_ngh_node_batch)
-    #         eidx_records.append(out_ngh_eidx_batch)
-    #         t_records.append(out_ngh_t_batch)
-    #     return node_records, eidx_records, t_records
+    
 
             
 

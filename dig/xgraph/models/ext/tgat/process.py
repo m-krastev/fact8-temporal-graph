@@ -68,69 +68,82 @@ def simulate_dataset_train_flag(df):
 #     i = i + 1 + num_users
 #     return u, i
 
-def reindex(df: pd.DataFrame):
-    # assert(df.u.max() - df.u.min() + 1 == len(df.u.unique())) # u names are continue
-    # assert(df.i.max() - df.i.min() + 1 == len(df.i.unique())) # i names are continue
-    new_df = df.copy()
+# def reindex(df: pd.DataFrame):
+#     # assert(df.u.max() - df.u.min() + 1 == len(df.u.unique())) # u names are continue
+#     # assert(df.i.max() - df.i.min() + 1 == len(df.i.unique())) # i names are continue
+#     new_df = df.copy()
 
-    num_u = df.u.max() + 1 #! number of users
-    new_df.i = df.i + num_u
+#     num_u = df.u.max() + 1 #! number of users
+#     new_df.i = df.i + num_u
 
-    new_df.u += 1 # user index starts as 1, 2, ..., k
-    new_df.i += 1 # item index starts as k+1, k+2, ...
+#     new_df.u += 1 # user index starts as 1, 2, ..., k
+#     new_df.i += 1 # item index starts as k+1, k+2, ...
     
-    new_df.idx += 1 # NOTE: should change
+#     new_df.idx += 1 # NOTE: should change
     
-    print('number of users: ', new_df.u.max())
-    print('number of items: ', new_df.i.max() - new_df.u.max())
-    print('number of users+items: ', new_df.i.max())
-    return new_df
+#     print('number of users: ', new_df.u.max())
+#     print('number of items: ', new_df.i.max() - new_df.u.max())
+#     print('number of users+items: ', new_df.i.max())
+#     return new_df
 
-def check_df(df):
-    for label in ['u', 'i', 'ts', 'label']:
-        assert label in df.columns.to_list()
-    assert df['u'].min() == 0
-    assert df['i'].min() == 0
-    assert df['u'].max() + 1 == df['u'].nunique() # users: 0, 1, ...
-    assert df['i'].max() + 1 == df['i'].nunique() # items: 0, 1, ...
-    assert df.index.values.min() == 0
-    assert df.index.values.max() + 1 == len(df)
-    print('input data format ok')
 
-def verify_df(df):
-    """
-    after reindexing
-    """
-    # assert df.columns.to_list() == ['u', 'i', 'ts', 'label', 'idx']
-    for label in ['u', 'i', 'ts', 'label', 'idx']:
-        assert label in df.columns.to_list()
-    assert df['idx'].min() == 1
-    assert df['idx'].max() == len(df)
-    assert df['u'].min() == 1
-    assert df['u'].max() == df['u'].nunique()
-    assert df['i'].min() == df['u'].max() + 1
-    assert df['i'].max() - df['i'].min() + 1 == df['i'].nunique()
-    print('verified data format ok')
+# def check_df(df):
+#     for label in ['u', 'i', 'ts', 'label']:
+#         assert label in df.columns.to_list()
+#     assert df['u'].min() == 0
+#     assert df['i'].min() == 0
+#     assert df['u'].max() + 1 == df['u'].nunique() # users: 0, 1, ...
+#     assert df['i'].max() + 1 == df['i'].nunique() # items: 0, 1, ...
+#     assert df.index.values.min() == 0
+#     assert df.index.values.max() + 1 == len(df)
+#     print('input data format ok')
 
-def rename_columns_wiki_reddit():
-    from dig import ROOT_DIR
-    data_dir = ROOT_DIR/'xgraph'/'dataset'/'data'
-    data_names = ['wikipedia', 'reddit']
+# def verify_df(df):
+#     """
+#     after reindexing
+#     """
+#     # assert df.columns.to_list() == ['u', 'i', 'ts', 'label', 'idx']
+#     for label in ['u', 'i', 'ts', 'label', 'idx']:
+#         assert label in df.columns.to_list()
+#     assert df['idx'].min() == 1
+#     assert df['idx'].max() == len(df)
+#     assert df['u'].min() == 1
+#     assert df['u'].max() == df['u'].nunique()
+#     assert df['i'].min() == df['u'].max() + 1
+#     assert df['i'].max() - df['i'].min() + 1 == df['i'].nunique()
+#     print('verified data format ok')
 
-    for data_name in data_names:
-        data_path = data_dir/f'{data_name}.csv'
-        df = pd.read_csv(data_path, skiprows=1, header=None)
-        feat_nums = df.shape[1] - 4
-        new_columns = ['u', 'i', 'ts', 'label']
-        for i in range(feat_nums):
-            new_columns.append( f'f{i}' )
-        
-        rename_dict = {i: new_columns[i] for i in range(len(new_columns))}
-        df.rename(columns=rename_dict, inplace=True)
-        df.to_csv(data_path, index=False)
+def rename_columns_wiki_reddit(file):
+    # from dig import ROOT_DIR
+    # data_dir = ROOT_DIR/'xgraph'/'dataset'/'data'
+    # data_names = ['wikipedia', 'reddit']
+
+    # for data_name in data_names:
+        # data_path = data_dir/f'{data_name}.csv'
+    df = pd.read_csv(file, skiprows=1, header=None)
+    feat_nums = df.shape[1] - 4
+    new_columns = ['u', 'i', 'ts', 'label']
+    
+    for i in range(feat_nums):
+        new_columns.append( f'f{i}' )
+    
+    rename_dict = {i: new_columns[i] for i in range(len(new_columns))}
+    df.rename(columns=rename_dict, inplace=True)
+    df.to_csv(file, index=False)
+    print(f'rename the columns of {file}.')
+
+def reindex(df):
+    df['i'] += df['u'].max() + 1
+    df['u'] += 1
+    df['i'] += 1
+    df['e_idx'] = df.index.values + 1
+    df['idx'] = df.e_idx
+    return df
 
 def run(data_name, out_dir=None):
     from dig import ROOT_DIR
+    from dig.xgraph.dataset.tg_dataset import verify_dataframe_unify, check_wiki_reddit_dataformat
+
     data_dir = ROOT_DIR/'xgraph'/'dataset'/'data'
     data_path = data_dir/f'{data_name}.csv'
 
@@ -146,16 +159,22 @@ def run(data_name, out_dir=None):
     
     df = pd.read_csv(data_path)
 
-    check_df(df)
+    # the very raw format
+    if 'comma_separated_list_of_features' in df.columns.tolist():
+        rename_columns_wiki_reddit(data_path)
+        df = pd.read_csv(data_path)
+
+    check_wiki_reddit_dataformat(df)
+
     # import ipdb; ipdb.set_trace()
-
-    df['idx'] = df.index.values
-    new_df = reindex(df)
-
-    verify_df(new_df)
+    df = reindex(df)
+    verify_dataframe_unify(df)
+    
+    new_df = df
 
     # set edge feature and node feature
     if data_name == 'simulate_v2':
+        raise NotImplementedError
         feature_dim = 64
         num_nodes = new_df.i.max()
         node_feat = []
@@ -175,27 +194,32 @@ def run(data_name, out_dir=None):
         assert node_feat.shape == (num_nodes, feature_dim)
         node_feat = np.vstack([np.zeros((1, feature_dim)), node_feat])
         edge_feat = np.zeros((len(df) + 1, feature_dim))
+    elif data_name == 'simulate_v1':
+        raise NotImplementedError
 
     elif data_name == 'wikipedia' or data_name == 'reddit':
         select_columns = [c for c in new_df.columns if 'f' in c] # features
-        edge_feat = new_df[select_columns].to_numpy()
+        edge_feat = np.zeros((len(df) + 1, len(select_columns))) # 0-th pad with 0
+        edge_feat[1:, :] = new_df[select_columns].to_numpy()
+
         edge_feat_dim = edge_feat.shape[1]
         num_nodes = new_df.i.max()
         node_feat = np.zeros((num_nodes + 1, edge_feat_dim))
-    
-    # elif data_name == 'simulate': # v1
-    else: # 'simulate', 'garden_5
-        feature_dim = 64
-        num_nodes = new_df.i.max()
-        node_feat = np.zeros((num_nodes + 1, feature_dim)) # node feature, all zeros, the 0-th is not used
-        edge_feat = np.zeros((len(df) + 1, feature_dim)) #! here set as 64, the 0-th is not used
-    # else: raise NotImplementedError
 
+    else: # 'simulate', 'garden_5
+        # feature_dim = 64
+        # num_nodes = new_df.i.max()
+        # node_feat = np.zeros((num_nodes + 1, feature_dim)) # node feature, all zeros, the 0-th is not used
+        # edge_feat = np.zeros((len(df) + 1, feature_dim)) #! here set as 64, the 0-th is not used
+        raise NotImplementedError
+
+    assert len(node_feat) == new_df.i.max() + 1
+    assert len(edge_feat) == len(new_df) + 1
 
     print('dataset: ', data_name)
     print('edge feature shape: ', edge_feat.shape)
     print('node feature shape: ', node_feat.shape)
-    new_df[['u', 'i', 'ts', 'label', 'idx']].to_csv(OUT_DF, index=False)
+    new_df[['u', 'i', 'ts', 'label', 'idx', 'e_idx']].to_csv(OUT_DF, index=False)
     np.save(OUT_EDGE_FEAT, edge_feat) # edge feature matrix
     np.save(OUT_NODE_FEAT, node_feat) # node feature matrix
     print(f'{OUT_DF} saved')
@@ -220,8 +244,9 @@ if __name__ == '__main__':
     dataset = args.data
 
     # process_garden_5()
-    if args.rename_w_r:
-        rename_columns_wiki_reddit()
-        exit()
+    if args.rename_w_r: # only run once!
+        # rename_columns_wiki_reddit()
+        # exit()
+        pass
 
     run(dataset)

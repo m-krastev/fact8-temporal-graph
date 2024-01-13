@@ -241,7 +241,10 @@ else:
     device = torch.device('cpu')
 tgan = TGAN(train_ngh_finder, n_feat, e_feat,
             num_layers=NUM_LAYER, use_time=USE_TIME, agg_method=AGG_METHOD, attn_mode=ATTN_MODE,
-            seq_len=SEQ_LEN, n_head=NUM_HEADS, drop_out=DROP_OUT)
+            n_head=NUM_HEADS, drop_out=DROP_OUT,
+            device=device,
+            
+            )
 optimizer = torch.optim.Adam(tgan.parameters(), lr=LEARNING_RATE)
 criterion = torch.nn.BCELoss()
 tgan = tgan.to(device)
@@ -318,7 +321,7 @@ for epoch in range(NUM_EPOCH):
     logger.info('train ap: {}, val ap: {}, new node val ap: {}'.format(np.mean(ap), val_ap, nn_val_ap))
     # logger.info('train f1: {}, val f1: {}, new node val f1: {}'.format(np.mean(f1), val_f1, nn_val_f1))
 
-    if early_stopper.early_stop_check(val_ap):
+    if early_stopper.early_stop_check(val_acc):
         logger.info('No improvment over {} epochs, stop training'.format(early_stopper.max_round))
         logger.info(f'Loading the best model at epoch {early_stopper.best_epoch}')
         best_model_path = get_checkpoint_path(early_stopper.best_epoch)
@@ -326,8 +329,8 @@ for epoch in range(NUM_EPOCH):
         logger.info(f'Loaded the best model at epoch {early_stopper.best_epoch} for inference')
         tgan.eval()
         break
-    else:
-        torch.save(tgan.state_dict(), get_checkpoint_path(epoch))
+    # else:
+    torch.save(tgan.state_dict(), get_checkpoint_path(epoch))
 
 
 # testing phase use all information

@@ -1,51 +1,86 @@
+from functools import partial
 import torch
+import time
 import hydra
 from omegaconf import DictConfig, OmegaConf
+import multiprocessing as mp
+from multiprocessing import Process
 
-from dig.xgraph.dataset.tg_dataset import load_tg_dataset
-from dig.xgraph.dataset.utils_dataset import construct_tgat_model_data
-from dig.xgraph.method.subgraphx_tg import SubgraphXTG
-from dig.xgraph.method.attn_explainer_tg import AttnExplainerTG
-from dig.xgraph.method.other_baselines_tg import PBOneExplainerTG, PGExplainerExt
+from dig.xgraph.dataset.tg_dataset import load_tg_dataset, load_explain_idx
+from dig.xgraph.dataset.utils_dataset import construct_tgat_neighbor_finder
 
 from dig.xgraph.models.ext.tgat.module import TGAN
+from dig.xgraph.models.ext.tgn.model.tgn import TGN
+from dig.xgraph.models.ext.tgn.utils.data_processing import compute_time_statistics
 from dig import ROOT_DIR
 
-from utils import load_explain_idx
+
+def start_multi_process(explainer, target_event_idxs, parallel_degree):
+    mp.set_start_method('spawn')
+    process_list = []
+    size = len(target_event_idxs)//parallel_degree
+    split = [ i* size for i in range(parallel_degree) ] + [len(target_event_idxs)]
+    return_dict = mp.Manager().dict()
+    for i in range(parallel_degree):
+        p = Process(target=explainer[i], kwargs={ 'event_idxs': target_event_idxs[split[i]:split[i+1]], 'return_dict': return_dict})
+        process_list.append(p)
+        p.start()
+    
+    for p in process_list:
+        p.join()
+    
+    explain_results = [return_dict[event_idx] for event_idx in target_event_idxs ]
+    return explain_results
+
+# def start_multi_process(explainer, target_event_idxs, parallel_degree):
+#     mp.set_start_method('spawn')
+#     return_dict = mp.Manager().dict()
+#     pool = mp.Pool(parallel_degree)
+#     for i, e_idx in enumerate(target_event_idxs):
+#         pool.apply_async( partial(explainer[i%parallel_degree], event_idxs=[e_idx,], return_dict=return_dict, device=i%4) )
+
+#     pool.close()
+#     pool.join()
+    
+#     import ipdb; ipdb.set_trace()
+#     explain_results = [return_dict[event_idx] for event_idx in target_event_idxs ]
+#     return explain_results
+
 
 
 @hydra.main(config_path='config', config_name='config')
 def pipeline(config: DictConfig):
-    # set configurations
     # model config
-    # explainer config
-    
     config.models.param = config.models.param[config.datasets.dataset_name]
     config.models.ckpt_path = str(ROOT_DIR/'xgraph'/'models'/'checkpoints'/f'{config.models.model_name}_{config.datasets.dataset_name}_best.pth')
 
+    # dataset config
     config.datasets.dataset_path = str(ROOT_DIR/'xgraph'/'dataset'/'data'/f'{config.datasets.dataset_name}.csv')
     config.datasets.explain_idx_filepath = str(ROOT_DIR/'xgraph'/'dataset'/'explain_index'/f'{config.datasets.explain_idx_filename}.csv')
-    
+
+    # explainer config
     config.explainers.param = config.explainers.param[config.datasets.dataset_name]
     config.explainers.results_dir = str(ROOT_DIR.parent/'benchmarks'/'results')
     config.explainers.mcts_saved_dir = str(ROOT_DIR/'xgraph'/'saved_mcts_results')
-    # config.explainers.mcts_saved_filename = f'{config.datasets.dataset_name}_{config.models.model_name}_{config.explainers.param.target_event_idx}_mcts_node_info.pt'
+    config.explainers.explainer_ckpt_dir = str(ROOT_DIR/'xgraph'/'explainer_ckpts')
+    
     print(OmegaConf.to_yaml(config))
 
     # import ipdb; ipdb.set_trace()
 
-    if torch.cuda.is_available() and  config.explainers.use_gpu:
+    if torch.cuda.is_available() and config.explainers.use_gpu:
         device = torch.device('cuda', index=config.device_id)
     else:
         device = torch.device('cpu')
 
-    events, n_users, n_items = load_tg_dataset(config.datasets.dataset_path, 
-                                                        target_model=config.models.model_name, dataset_params=config.datasets)
-
+    # DONE: only use tgat processed data
+    events, edge_feats, node_feats = load_tg_dataset(config.datasets.dataset_name)
+    target_event_idxs = load_explain_idx(config.datasets.explain_idx_filepath, start=0)
+    ngh_finder = construct_tgat_neighbor_finder(events)
 
     if config.models.model_name == 'tgat':
-        ngh_finder, node_feats, edge_feats = construct_tgat_model_data(events, config.datasets.dataset_name)
         model = TGAN(ngh_finder, node_feats, edge_feats,
+                     device=device,
                      attn_mode=config.models.param.attn_mode,
                      use_time=config.models.param.use_time,
                      agg_method=config.models.param.agg_method,
@@ -54,33 +89,74 @@ def pipeline(config: DictConfig):
                      num_neighbors=config.models.param.num_neighbors, 
                      drop_out=config.models.param.dropout
                      )
-    else: 
-        raise NotImplementedError('To do.')
+    elif config.models.model_name == 'tgn': # DONE: added tgn
+        mean_time_shift_src, std_time_shift_src, mean_time_shift_dst, std_time_shift_dst = compute_time_statistics(events.u.values, events.i.values, events.ts.values )
+        model = TGN(ngh_finder, node_feats, edge_feats,
+                    device=device,
+                    n_layers=config.models.param.num_layers,
+                    n_heads=config.models.param.num_heads,
+                    dropout=config.models.param.dropout,
+                    use_memory=True, # True
+                    forbidden_memory_update=True, # True
+                    memory_update_at_start=False, # False
+                    message_dimension=config.models.param.message_dimension,
+                    memory_dimension=config.models.param.memory_dimension,
+                    embedding_module_type='graph_attention', # fix
+                    message_function='identity', # fix
+                    mean_time_shift_src=mean_time_shift_src,
+                    std_time_shift_src=std_time_shift_src,
+                    mean_time_shift_dst=mean_time_shift_dst,
+                    std_time_shift_dst=std_time_shift_dst,
+                    n_neighbors=config.models.param.num_neighbors,
+                    aggregator_type='last', # fix
+                    memory_updater_type='gru', # fix
+                    use_destination_embedding_in_message=False,
+                    use_source_embedding_in_message=False,
+                    dyrep=False,
+                    )
+    else:    
+        raise NotImplementedError('Not supported.')
 
+    # load model checkpoints
     state_dict = torch.load(config.models.ckpt_path, map_location='cpu')
-    model.load_state_dict(state_dict)
+    model.load_state_dict(state_dict, strict=False)
     model.to(device)
 
-    # import ipdb; ipdb.set_trace()
-    # target_event_idx = config.explainers.param.target_event_idx
-    target_event_idxs = load_explain_idx(config.datasets.explain_idx_filepath)
+    # construct a pg_explainer_tg, the mcts_tg explainer may use it
+    if config.explainers.explainer_name == 'subgraphx_tg': # DONE: test this 'use_pg_explainer'
+        from dig.xgraph.method.subgraphx_tg import SubgraphXTG
+        from dig.xgraph.method.other_baselines_tg import PGExplainerExt
+        pg_explainer_model, explainer_ckpt_path = PGExplainerExt.expose_explainer_model(model, # load a trained mlp model
+                                model_name=config.models.model_name,
+                                explainer_name='pg_explainer_tg', # fixed
+                                dataset_name=config.datasets.dataset_name,
+                                ckpt_dir=config.explainers.explainer_ckpt_dir,
+                                device=device,
+                                )
+        print('used pg_explainer_tg ckpt:', explainer_ckpt_path)
 
-    if config.explainers.explainer_name == 'subgraphx_tg':
-        explainer = SubgraphXTG(model, 
+        assert config.explainers.parallel_degree >= 1
+        explainer = [SubgraphXTG(model, 
                                 config.models.model_name, 
                                 config.explainers.explainer_name,
                                 config.datasets.dataset_name,
                                 events,
                                 config.explainers.param.explanation_level, 
                                 device=device,
+                                debug_mode=config.explainers.debug_mode,
                                 save_results=config.explainers.results_save,
                                 mcts_saved_dir=config.explainers.mcts_saved_dir,
-                                # mcts_saved_filename=config.explainers.mcts_saved_filename,
                                 load_results=config.explainers.load_results,
                                 rollout=config.explainers.param.rollout,
-                                debug_mode=config.explainers.debug_mode
-        )
+                                min_atoms=config.explainers.param.min_atoms,
+                                c_puct=config.explainers.param.c_puct,
+                                pg_explainer_model=pg_explainer_model if config.explainers.use_pg_explainer else None,
+                                pg_positive=config.explainers.pg_positive,
+        ) for i in range(config.explainers.parallel_degree)]
+        
+    
     elif config.explainers.explainer_name == 'attn_explainer_tg':
+        from dig.xgraph.method.attn_explainer_tg import AttnExplainerTG
         explainer = AttnExplainerTG(
                                 model,
                                 config.models.model_name,
@@ -89,8 +165,10 @@ def pipeline(config: DictConfig):
                                 events,
                                 config.explainers.param.explanation_level, 
                                 device=device,
+                                debug_mode=config.explainers.debug_mode,
         )
     elif config.explainers.explainer_name == 'pbone_explainer_tg':
+        from dig.xgraph.method.other_baselines_tg import PBOneExplainerTG
         explainer = PBOneExplainerTG(
                                 model,
                                 config.models.model_name,
@@ -99,10 +177,10 @@ def pipeline(config: DictConfig):
                                 events,
                                 config.explainers.param.explanation_level, 
                                 device=device,
+                                debug_mode=config.explainers.debug_mode,
         )
     elif config.explainers.explainer_name == 'pg_explainer_tg':
-        config.explainers.explainer_ckpt_dir = str(ROOT_DIR/'xgraph'/'explainer_ckpts')
-        # /f'{config.models.model_name}_{config.datasets.dataset_name}_{config.explainers.explainer_name}_expl_ckpt.pt'
+        from dig.xgraph.method.other_baselines_tg import PGExplainerExt
         explainer = PGExplainerExt(
                                 model,
                                 config.models.model_name,
@@ -116,63 +194,47 @@ def pipeline(config: DictConfig):
                                 reg_coefs=config.explainers.param.reg_coefs,
                                 batch_size=config.explainers.param.batch_size,
                                 lr=config.explainers.param.lr,
+                                debug_mode=config.explainers.debug_mode,
         )
+    
 
     # run the explainer
-    # target_event_idx = 9909
-    # target_event_idx = 19
-    # target_event_idx = 29
-    
-    # import ipdb; ipdb.set_trace()
-    # tree_results, tree_node_x = explainer(event_idx=target_event_idx)
-    explain_results = explainer(event_idxs=target_event_idxs)
+    start_time = time.time()
+    if config.explainers.explainer_name == 'subgraphx_tg' and config.explainers.parallel_degree == 1:
+        explainer = explainer[0]
+        explain_results = explainer(event_idxs=target_event_idxs)
+    elif config.explainers.explainer_name == 'subgraphx_tg' and config.explainers.parallel_degree > 1:
+        explain_results = start_multi_process(explainer, target_event_idxs, config.explainers.parallel_degree)
+    else:
+        explain_results = explainer(event_idxs=target_event_idxs)
+    end_time = time.time()
+    print(f'runtime: {end_time - start_time:.2f}s')
 
+    # exit(0)
+
+    # compute metric values and save
     if config.explainers.explainer_name == 'subgraphx_tg':
         from dig.xgraph.evaluation.metrics_tg import EvaluatorMCTSTG
         evaluator = EvaluatorMCTSTG(model_name=config.models.model_name,
                                     explainer_name=config.explainers.explainer_name,
                                     dataset_name=config.datasets.dataset_name,
-                                    explainer=explainer,
+                                    explainer=explainer[0] if isinstance(explainer, list) else explainer,
                                     results_dir=config.explainers.results_dir
                                     ) 
-    elif config.explainers.explainer_name == 'attn_explainer_tg' or config.explainers.explainer_name == 'pbone_explainer_tg' \
-        or config.explainers.explainer_name == 'pg_explainer_tg':
-    
+    elif config.explainers.explainer_name in ['attn_explainer_tg', 'pbone_explainer_tg', 'pg_explainer_tg']:
         from dig.xgraph.evaluation.metrics_tg import EvaluatorAttenTG
         evaluator = EvaluatorAttenTG(model_name=config.models.model_name,
                                     explainer_name=config.explainers.explainer_name,
                                     dataset_name=config.datasets.dataset_name,
                                     explainer=explainer,
                                     results_dir=config.explainers.results_dir
-                                    ) # TODO: update
+                                    ) # DONE: updated
+    else:
+        raise NotImplementedError
 
     evaluator.evaluate(explain_results, target_event_idxs)
     # import ipdb; ipdb.set_trace()
-    exit(0)
-
-    # evaluate
-    import json
-    sparsity = 0.0
-    mcts_state_map = explainer.mcts_state_map if not config.explainers.load_results else None
-    evaluator = EvaluatorMCTSTG(explainer.tgnn_reward_wraper, tree_results, sparsity, target_event_idx,
-                                    candidate_number=len(explainer.candidate_events),
-                                    mcts_state_map=mcts_state_map,
-                                    )
-    evaluation_dict = evaluator.evaluate()
-    print(json.dumps(evaluation_dict, indent=4))
-
-    if not config.explainers.load_results: # TODO: to optimize this
-        mcts_info_dict = {
-            'rollout number': explainer.mcts_state_map.n_rollout,
-            'state number': len(explainer.mcts_state_map.state_map),
-            'rollout avg runtime': explainer.mcts_state_map.run_time / explainer.mcts_state_map.n_rollout,
-            'rollout total time': explainer.mcts_state_map.run_time
-        }
-        print(json.dumps(mcts_info_dict, indent=4))
-    
-    print('candidate event idxs: ', explainer.candidate_events)
-    print('searched important event idxs: ', tree_node_x.coalition)
-
+    # exit(0)
 
 
 if __name__ == '__main__':

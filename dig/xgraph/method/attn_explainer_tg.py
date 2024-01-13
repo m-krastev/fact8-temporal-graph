@@ -1,16 +1,13 @@
-from typing import Optional, Union
-from unittest import result
-from pandas import DataFrame
 import numpy as np
+from typing import Union
+from pandas import DataFrame
 
-from dig.xgraph.method.subgraphx_tg import BaseExplainerTG
-from dig.xgraph.method.tg_score import TGNNRewardWraper
-from dig.xgraph.dataset.utils_dataset import k_hop_temporal_subgraph
+from dig.xgraph.method.base_explainer_tg import BaseExplainerTG
 
 
 class AttnExplainerTG(BaseExplainerTG):
     def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, result_dir = None,
+                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, result_dir = None, debug_mode=True,
                 ):
         super(AttnExplainerTG, self).__init__(model=model,
                                               model_name=model_name,
@@ -20,21 +17,35 @@ class AttnExplainerTG(BaseExplainerTG):
                                               explanation_level=explanation_level,
                                               device=device,
                                               verbose=verbose,
-                                              results_dir=result_dir
+                                              results_dir=result_dir,
+                                              debug_mode=debug_mode,
                                               )
         # assert model_name in ['tgat', 'tgn']
         
+    @staticmethod
+    def _agg_attention(model, model_name):
+        # after a forward computation in the model
 
-    def _agg_attention(self, atten_weights_list):
+        # aggregate attention weights
+        if model_name == 'tgat':
+            atten_weights_list = model.atten_weights_list
+        elif model_name == 'tgn':
+            atten_weights_list = model.embedding_module.atten_weights_list
+
+
         e_idx_weight_dict = {}
         for item in atten_weights_list:
-            src_ngh_eidx = item['src_ngh_eidx']
-            weights = item['attn_weight'].mean(dim=0)
+            if model_name == 'tgat':
+                edge_idxs = item['src_ngh_eidx']
+                weights = item['attn_weight'].mean(dim=0) # a special process
+            elif model_name == 'tgn':
+                edge_idxs = item['src_ngh_eidx']
+                weights = item['attn_weight']
 
-            src_ngh_eidx = src_ngh_eidx.detach().cpu().numpy().flatten()
+            edge_idxs = edge_idxs.detach().cpu().numpy().flatten()
             weights = weights.detach().cpu().numpy().flatten()
 
-            for e_idx, w in zip(src_ngh_eidx, weights):
+            for e_idx, w in zip(edge_idxs, weights):
                 if e_idx_weight_dict.get(e_idx, None) is None:
                     e_idx_weight_dict[e_idx] = [w,]
                 else:
@@ -48,22 +59,17 @@ class AttnExplainerTG(BaseExplainerTG):
 
     def explain(self, node_idx=None, event_idx=None):
         # compute attention weights
-        events_idxs = self.ori_subgraph_df.index.values.tolist()
-        score = self.tgnn_reward_wraper._compute_gnn_score(events_idxs, event_idx)
+        # events_idxs = self.ori_subgraph_df.index.values.tolist()
+        events_idxs = self.ori_subgraph_df.e_idx.values
+        score = self.tgnn_reward_wraper._compute_gnn_score(events_idxs, event_idx) # NOTE: required.
 
-        # aggregate attention weights
-        atten_weights_list = self.model.atten_weights_list
-        e_idx_weight_dict = self._agg_attention(atten_weights_list)
-
-        # TODO: note here is only for tgat!!!!
-        # TODO: the whole explain function may need to be altered to support other models, e.g., tgn
-        # import ipdb; ipdb.set_trace()
-        new_e_idx_weight_dict = { key-1: e_idx_weight_dict[key] for key in e_idx_weight_dict.keys() } # NOTE: important, the keys in e_idx_weight_dict has been added 1 for tgat model.
+        e_idx_weight_dict = self._agg_attention(self.model, self.model_name)
 
         # import ipdb; ipdb.set_trace()
-        candidate_weights = { e_idx: new_e_idx_weight_dict[e_idx] for e_idx in self.candidate_events }
+        candidate_weights = { e_idx: e_idx_weight_dict[e_idx] for e_idx in self.candidate_events }
         candidate_weights = dict( sorted(candidate_weights.items(), key=lambda x: x[1], reverse=True) ) # NOTE: descending, important
 
+        # import ipdb; ipdb.set_trace()
 
         return candidate_weights
 

@@ -7,23 +7,28 @@ load_results: False
 use_gpu: True
 explainer_name: 'pbone_explainer_tg'
 debug_mode: False
+explainer_ckpt_dir: ''
 
 param:
-  simulate:
+  # simulate:
+  #   explanation_level: 'event'
+  #   verbose: True
+  #   tscore_coef: None
+  #   beta: None
+  # simulate_v2:
+  #   explanation_level: 'event'
+  #   verbose: True
+  # garden_5:
+  #   explanation_level: 'event'
+  #   verbose: True
+  wikipedia:
     explanation_level: 'event'
     verbose: True
-    # rollout: 500
-    tscore_coef: None
-    beta: None
-  simulate_v2:
+  reddit:
     explanation_level: 'event'
-    # target_event_idx: 59
     verbose: True
-    # rollout: 10
-  garden_5:
+  simulate_v1:
     explanation_level: 'event'
-    # target_event_idx: 800
     verbose: True
-    # rollout: 30
 
   
