@@ -11,34 +11,15 @@ use_pg_explainer: True
 pg_positive: True
 
 
-parallel_degree: 6 # 1, 2, ...
+parallel_degree: 1 # 1, 2, ...
 
 param:
-  # simulate:
-  #   explanation_level: 'event'
-  #   # target_event_idx: 9909
-  #   verbose: True
-  #   rollout: 1000
-  #   tscore_coef: None
-  #   beta: None
-  # simulate_v2:
-  #   explanation_level: 'event'
-  #   # target_event_idx: 59
-  #   verbose: True
-  #   rollout: 10
-  # garden_5:
-  #   explanation_level: 'event'
-  #   # target_event_idx: 800
-  #   verbose: True
-  #   rollout: 30
   wikipedia:
     explanation_level: 'event'
     verbose: True
     rollout: 500
     c_puct: 100
     min_atoms: 100
-    # tscore_coef: None
-    # beta: None
   reddit:
     explanation_level: 'event'
     verbose: True
@@ -51,4 +32,10 @@ param:
     rollout: 500
     c_puct: 100
     min_atoms: 20 # only influence use_pg_explainer's fidelity-rollout curve
+  simulate_v2:
+    explanation_level: 'event'
+    verbose: True
+    rollout: 500
+    c_puct: 100
+    min_atoms: 20
   

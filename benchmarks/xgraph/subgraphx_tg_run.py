@@ -1,4 +1,3 @@
-from functools import partial
 import torch
 import time
 import hydra
@@ -6,13 +5,13 @@ from omegaconf import DictConfig, OmegaConf
 import multiprocessing as mp
 from multiprocessing import Process
 
-from dig.xgraph.dataset.tg_dataset import load_tg_dataset, load_explain_idx
-from dig.xgraph.dataset.utils_dataset import construct_tgat_neighbor_finder
+from tgnnexplainer.xgraph.dataset.tg_dataset import load_tg_dataset, load_explain_idx
+from tgnnexplainer.xgraph.dataset.utils_dataset import construct_tgat_neighbor_finder
 
-from dig.xgraph.models.ext.tgat.module import TGAN
-from dig.xgraph.models.ext.tgn.model.tgn import TGN
-from dig.xgraph.models.ext.tgn.utils.data_processing import compute_time_statistics
-from dig import ROOT_DIR
+from tgnnexplainer.xgraph.models.ext.tgat.module import TGAN
+from tgnnexplainer.xgraph.models.ext.tgn.model.tgn import TGN
+from tgnnexplainer.xgraph.models.ext.tgn.utils.data_processing import compute_time_statistics
+from tgnnexplainer import ROOT_DIR
 
 
 def start_multi_process(explainer, target_event_idxs, parallel_degree):
@@ -124,8 +123,8 @@ def pipeline(config: DictConfig):
 
     # construct a pg_explainer_tg, the mcts_tg explainer may use it
     if config.explainers.explainer_name == 'subgraphx_tg': # DONE: test this 'use_pg_explainer'
-        from dig.xgraph.method.subgraphx_tg import SubgraphXTG
-        from dig.xgraph.method.other_baselines_tg import PGExplainerExt
+        from tgnnexplainer.xgraph.method.subgraphx_tg import SubgraphXTG
+        from tgnnexplainer.xgraph.method.other_baselines_tg import PGExplainerExt
         pg_explainer_model, explainer_ckpt_path = PGExplainerExt.expose_explainer_model(model, # load a trained mlp model
                                 model_name=config.models.model_name,
                                 explainer_name='pg_explainer_tg', # fixed
@@ -143,6 +142,7 @@ def pipeline(config: DictConfig):
                                 events,
                                 config.explainers.param.explanation_level, 
                                 device=device,
+                                results_dir=config.explainers.results_dir,
                                 debug_mode=config.explainers.debug_mode,
                                 save_results=config.explainers.results_save,
                                 mcts_saved_dir=config.explainers.mcts_saved_dir,
@@ -156,7 +156,7 @@ def pipeline(config: DictConfig):
         
     
     elif config.explainers.explainer_name == 'attn_explainer_tg':
-        from dig.xgraph.method.attn_explainer_tg import AttnExplainerTG
+        from tgnnexplainer.xgraph.method.attn_explainer_tg import AttnExplainerTG
         explainer = AttnExplainerTG(
                                 model,
                                 config.models.model_name,
@@ -165,10 +165,11 @@ def pipeline(config: DictConfig):
                                 events,
                                 config.explainers.param.explanation_level, 
                                 device=device,
+                                results_dir=config.explainers.results_dir,
                                 debug_mode=config.explainers.debug_mode,
         )
     elif config.explainers.explainer_name == 'pbone_explainer_tg':
-        from dig.xgraph.method.other_baselines_tg import PBOneExplainerTG
+        from tgnnexplainer.xgraph.method.other_baselines_tg import PBOneExplainerTG
         explainer = PBOneExplainerTG(
                                 model,
                                 config.models.model_name,
@@ -177,10 +178,11 @@ def pipeline(config: DictConfig):
                                 events,
                                 config.explainers.param.explanation_level, 
                                 device=device,
+                                results_dir=config.explainers.results_dir,
                                 debug_mode=config.explainers.debug_mode,
         )
     elif config.explainers.explainer_name == 'pg_explainer_tg':
-        from dig.xgraph.method.other_baselines_tg import PGExplainerExt
+        from tgnnexplainer.xgraph.method.other_baselines_tg import PGExplainerExt
         explainer = PGExplainerExt(
                                 model,
                                 config.models.model_name,
@@ -189,6 +191,7 @@ def pipeline(config: DictConfig):
                                 events,
                                 config.explainers.param.explanation_level, 
                                 device=device,
+                                results_dir=config.explainers.results_dir,
                                 train_epochs=config.explainers.param.train_epochs,
                                 explainer_ckpt_dir=config.explainers.explainer_ckpt_dir,
                                 reg_coefs=config.explainers.param.reg_coefs,
@@ -214,7 +217,7 @@ def pipeline(config: DictConfig):
 
     # compute metric values and save
     if config.explainers.explainer_name == 'subgraphx_tg':
-        from dig.xgraph.evaluation.metrics_tg import EvaluatorMCTSTG
+        from tgnnexplainer.xgraph.evaluation.metrics_tg import EvaluatorMCTSTG
         evaluator = EvaluatorMCTSTG(model_name=config.models.model_name,
                                     explainer_name=config.explainers.explainer_name,
                                     dataset_name=config.datasets.dataset_name,
@@ -222,7 +225,7 @@ def pipeline(config: DictConfig):
                                     results_dir=config.explainers.results_dir
                                     ) 
     elif config.explainers.explainer_name in ['attn_explainer_tg', 'pbone_explainer_tg', 'pg_explainer_tg']:
-        from dig.xgraph.evaluation.metrics_tg import EvaluatorAttenTG
+        from tgnnexplainer.xgraph.evaluation.metrics_tg import EvaluatorAttenTG
         evaluator = EvaluatorAttenTG(model_name=config.models.model_name,
                                     explainer_name=config.explainers.explainer_name,
                                     dataset_name=config.datasets.dataset_name,
@@ -232,7 +235,10 @@ def pipeline(config: DictConfig):
     else:
         raise NotImplementedError
 
-    evaluator.evaluate(explain_results, target_event_idxs)
+    if config.evaluate:
+        evaluator.evaluate(explain_results, target_event_idxs)
+    else:
+        print('no evaluate.')
     # import ipdb; ipdb.set_trace()
     # exit(0)
 

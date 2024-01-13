@@ -2,7 +2,6 @@
 results_save: False
 results_dir: ''
 mcts_saved_dir: ''
-# mcts_saved_filename: ''
 load_results: False
 use_gpu: True
 explainer_name: 'pbone_explainer_tg'
@@ -10,17 +9,6 @@ debug_mode: False
 explainer_ckpt_dir: ''
 
 param:
-  # simulate:
-  #   explanation_level: 'event'
-  #   verbose: True
-  #   tscore_coef: None
-  #   beta: None
-  # simulate_v2:
-  #   explanation_level: 'event'
-  #   verbose: True
-  # garden_5:
-  #   explanation_level: 'event'
-  #   verbose: True
   wikipedia:
     explanation_level: 'event'
     verbose: True
@@ -28,6 +16,9 @@ param:
     explanation_level: 'event'
     verbose: True
   simulate_v1:
+    explanation_level: 'event'
+    verbose: True
+  simulate_v2:
     explanation_level: 'event'
     verbose: True
 

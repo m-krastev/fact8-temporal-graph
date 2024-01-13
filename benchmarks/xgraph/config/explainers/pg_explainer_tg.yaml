@@ -2,7 +2,6 @@
 results_save: False
 results_dir: ''
 mcts_saved_dir: ''
-# mcts_saved_filename: ''
 load_results: False
 use_gpu: True
 explainer_name: 'pg_explainer_tg'
@@ -10,17 +9,6 @@ explainer_ckpt_dir: ''
 debug_mode: False
 
 param:
-  simulate:
-    explanation_level: 'event'
-    verbose: True
-    tscore_coef: None
-    beta: None
-  simulate_v2:
-    explanation_level: 'event'
-    verbose: True
-  garden_5:
-    explanation_level: 'event'
-    verbose: True
   wikipedia:
     explanation_level: 'event'
     verbose: True
@@ -31,7 +19,6 @@ param:
     batch_size: 16
     lr: 1e-4
   reddit:
-    wikipedia:
     explanation_level: 'event'
     verbose: True
     train_epochs: 30 # 20
@@ -41,7 +28,15 @@ param:
     batch_size: 16
     lr: 1e-4
   simulate_v1:
-    wikipedia:
+    explanation_level: 'event'
+    verbose: True
+    train_epochs: 20 # 20, 30, 
+    reg_coefs:
+      - 0.5
+      - 0.1
+    batch_size: 16
+    lr: 1e-4
+  simulate_v2:
     explanation_level: 'event'
     verbose: True
     train_epochs: 20 # 20, 30, 

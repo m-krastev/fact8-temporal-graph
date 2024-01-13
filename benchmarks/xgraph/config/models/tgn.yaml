@@ -3,25 +3,6 @@ model_name: 'tgn'
 
 ckpt_path: ''
 param:
-  # simulate:
-  #   num_layers: 2
-  #   use_time: 'time'
-  #   agg_method: 'attn'
-  #   attn_mode: 'prod'
-  #   num_neighbors: 20
-  #   num_heads: 2
-  #   dropout: 0.1
-  #   uniform_sample_ngh: False
-  #   # num_neigs_limit: 20
-  # simulate_v2:
-  #   num_layers: 2
-  #   use_time: 'time'
-  #   agg_method: 'attn'
-  #   attn_mode: 'prod'
-  #   num_neighbors: 20
-  #   num_heads: 2
-  #   dropout: 0.1
-  #   uniform_sample_ngh: False
   wikipedia:
     num_layers: 2
     num_heads: 2
@@ -37,6 +18,13 @@ param:
     message_dimension: 100
     memory_dimension: 172
   simulate_v1:
+    num_layers: 2
+    num_heads: 2
+    dropout: 0.0
+    num_neighbors: 10
+    message_dimension: 100
+    memory_dimension: 4
+  simulate_v2:
     num_layers: 2
     num_heads: 2
     dropout: 0.0
