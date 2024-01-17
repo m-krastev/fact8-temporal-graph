@@ -1,6 +1,7 @@
 """Unified interface to all dynamic graph model experiments"""
 import math
 import logging
+import os
 import time
 import random
 import sys
@@ -81,6 +82,9 @@ TIME_DIM = args.time_dim
 # import ipdb; ipdb.set_trace()
 
 # MODEL_SAVE_PATH = f'./saved_models/{args.data}-{args.agg_method}-{args.attn_mode}.pth'
+
+os.makedirs('saved_models', exist_ok=True)
+os.makedirs('saved_checkpoints', exist_ok=True)
 MODEL_SAVE_PATH = f'./saved_models/tgat_{args.data}_best.pth'
 get_checkpoint_path = lambda epoch: f'./saved_checkpoints/{args.data}-{args.agg_method}-{args.attn_mode}-{epoch}.pth'
 
@@ -88,7 +92,9 @@ get_checkpoint_path = lambda epoch: f'./saved_checkpoints/{args.data}-{args.agg_
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
+os.makedirs('log', exist_ok=True)
 fh = logging.FileHandler('log/{}.log'.format(str(time.time())))
+
 fh.setLevel(logging.DEBUG)
 ch = logging.StreamHandler()
 ch.setLevel(logging.WARN)

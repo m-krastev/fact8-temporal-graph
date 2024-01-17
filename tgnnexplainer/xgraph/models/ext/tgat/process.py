@@ -46,6 +46,7 @@ def run(data_name, out_dir=None):
     else:
         out_dir = Path(out_dir)
 
+    out_dir.mkdir(exist_ok=True)
     OUT_DF = out_dir/'ml_{}.csv'.format(data_name)
     OUT_EDGE_FEAT = out_dir/'ml_{}.npy'.format(data_name)
     OUT_NODE_FEAT = out_dir/'ml_{}_node.npy'.format(data_name)

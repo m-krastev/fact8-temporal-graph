@@ -171,7 +171,7 @@ for src, dst, eidx, ts in zip(src_l, dst_l, e_idx_l, ts_l):
 full_ngh_finder = NeighborFinder(full_adj_list, uniform=UNIFORM)
 
 ### Model initialize
-device = torch.device('cuda:{}'.format(GPU))
+device = torch.device('cuda')
 tgan = TGAN(train_ngh_finder, n_feat, e_feat,
             num_layers=NUM_LAYER, use_time=USE_TIME, agg_method=AGG_METHOD, attn_mode=ATTN_MODE,
             seq_len=SEQ_LEN, n_head=NUM_HEADS, drop_out=DROP_OUT, node_dim=NODE_DIM, time_dim=TIME_DIM)

@@ -81,8 +81,8 @@ TIME_DIM = args.time_dim
 
 # import ipdb; ipdb.set_trace()
 
-MODEL_SAVE_PATH = f'./saved_models/tgat_{args.data}_best.pth'
-get_checkpoint_path = lambda epoch: f'./saved_checkpoints/{args.data}-{args.agg_method}-{args.attn_mode}-{epoch}.pth'
+MODEL_SAVE_PATH = f'./checkpoints/tgat_{args.data}_best.pth'
+get_checkpoint_path = lambda epoch: f'./checkpoints/{args.data}-{args.agg_method}-{args.attn_mode}-{epoch}.pth'
 
 ### set up logger
 logging.basicConfig(level=logging.INFO)
@@ -158,7 +158,9 @@ random.seed(2020)
 total_node_set = set(np.unique(np.hstack([g_df.u.values, g_df.i.values])))
 num_total_unique_nodes = len(total_node_set)
 
-mask_node_set = set(random.sample(set(src_l[ts_l > val_time]).union(set(dst_l[ts_l > val_time])), int(0.1 * num_total_unique_nodes)))
+mask_node_set = set(random.sample(
+    sorted(set(src_l[ts_l > val_time]).union(set(dst_l[ts_l > val_time]))), int(0.1 * num_total_unique_nodes))
+)
 mask_src_flag = g_df.u.map(lambda x: x in mask_node_set).values
 mask_dst_flag = g_df.i.map(lambda x: x in mask_node_set).values
 none_node_flag = (1 - mask_src_flag) * (1 - mask_dst_flag)
@@ -236,7 +238,7 @@ nn_test_rand_sampler = RandEdgeSampler(nn_test_src_l, nn_test_dst_l)
 
 ### Model initialize
 if torch.cuda.is_available():
-    device = torch.device('cuda:{}'.format(GPU))
+    device = torch.device('cuda')
 else:
     device = torch.device('cpu')
 tgan = TGAN(train_ngh_finder, n_feat, e_feat,

@@ -250,7 +250,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     np.random.seed(2022)
 
-    dataset_name = 'simulate_v2' # simulate_v1, simulate_v2
+    dataset_name = args.d or 'simulate_v2' # simulate_v1, simulate_v2
 
     if dataset_name == 'simulate_v1':
         hawkes, type_edge_mapping, n_nodes = simulate_hawkes_v1()

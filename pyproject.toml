@@ -18,9 +18,9 @@ maintainers = [
     {name = "David Beglou", email="david.beglou@student.uva.nl"}
 ]
 license = {file = "LICENSE"}
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 version = "0.1.1-dev"
 
 dependencies = [
-    "scipy","shap", "IPython", "tqdm", "rdkit-pypi", "pandas", "sympy", "hydra-core", "torch", "matplotlib"
+    "scipy","shap", "IPython", "tqdm", "rdkit", "pandas", "sympy", "hydra-core", "torch", "matplotlib", "torch_geometric"
 ]

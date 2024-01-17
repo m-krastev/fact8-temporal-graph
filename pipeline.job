@@ -1,0 +1,33 @@
+export PYTHONPATH=.:$PYTHONPATH
+export ROOT="~/project/fact8" # change with your root folder
+
+# curl http://snap.stanford.edu/jodie/reddit.csv > $ROOT/tgnnexplainer/xgraph/dataset/data/reddit.csv
+
+# curl http://snap.stanford.edu/jodie/wikipedia.csv > $ROOT/tgnnexplainer/xgraph/dataset/data/wikipedia.csv
+
+# # process the real dataset
+# cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
+# python process.py -d wikipedia
+# python process.py -d reddit
+
+# # generate simulated dataset
+# cd  $ROOT/tgnnexplainer/xgraph/dataset
+# python generate_simulate_dataset.py -d simulate_v1
+# python generate_simulate_dataset.py -d simulate_v2
+
+cd $ROOT/tgnnexplainer/xgraph/dataset
+python tg_dataset.py -d wikipedia -c index
+python tg_dataset.py -d reddit -c index
+python tg_dataset.py -d simulate_v1 -c index
+python tg_dataset.py -d simulate_v2 -c index
+
+cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
+./train.sh
+./cpckpt.sh
+
+cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgn
+./train.sh
+./cpckpt.sh
+
+cd  $ROOT/benchmarks/xgraph
+./run.sh
