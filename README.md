@@ -11,8 +11,8 @@ pip install .
 Note: sometimes, you may be getting import errors. Those can be patched by exporting the PYTHONPATH variable to the root of the project.
 
 ```Bash
-export PYTHONPATH=.:$PYTHONPATH
 export ROOT="/Users/matey/project/fact8" # change with your root folder
+export PYTHONPATH=$ROOT:.:$PYTHONPATH
 ```
 
 ---
