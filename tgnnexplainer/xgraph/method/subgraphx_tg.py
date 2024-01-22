@@ -456,7 +456,7 @@ class SubgraphXTG(BaseExplainerTG):
                                        min_atoms=self.min_atoms,
                                        c_puct=self.c_puct,
                                        score_func=self.tgnn_reward_wraper,
-                                    #    device=self.device,
+                                       device=self.device,
                                        candidate_initial_weights=self.candidate_initial_weights, # BUG: never pass through this parameter?????
                                     )
             
@@ -616,22 +616,22 @@ class SubgraphXTG(BaseExplainerTG):
 
     def _to_device(self, device):
         pass
-        # if torch.cuda.is_available():
-        #     device = torch.device('cuda', index=device)
-        # else:
-        #     device = torch.device('cpu')
+        if torch.cuda.is_available():
+            device = torch.device('cuda', index=device)
+        else:
+            device = torch.device('cpu')
         
-        # self.device = device
-        # self.model.device = device
-        # self.model.to(device)
+        self.device = device
+        self.model.device = device
+        self.model.to(device)
 
-        # if self.model_name == 'tgat':
-        #     self.model.node_raw_embed = self.model.node_raw_embed.to(device)
-        #     self.model.edge_raw_embed = self.model.edge_raw_embed.to(device)
-        #     pass
-        # elif self.model_name == 'tgn':
-        #     self.model.node_raw_features = self.model.node_raw_features.to(device)
-        #     self.model.edge_raw_features = self.model.edge_raw_features.to(device)
+        if self.model_name == 'tgat':
+            self.model.node_raw_embed = self.model.node_raw_embed.to(device)
+            self.model.edge_raw_embed = self.model.edge_raw_embed.to(device)
+            pass
+        elif self.model_name == 'tgn':
+            self.model.node_raw_features = self.model.node_raw_features.to(device)
+            self.model.edge_raw_features = self.model.edge_raw_features.to(device)
 
         # import ipdb; ipdb.set_trace()
 

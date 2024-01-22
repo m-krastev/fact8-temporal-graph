@@ -1,7 +1,7 @@
 # run all explainers
 
 # datasets=(simulate_v1 simulate_v2 wikipedia reddit)
-datasets=(simulate_v1)
+datasets=(simulate_v1 simulate_v2)
 # models=(tgat tgn)
 models=(tgat)
 

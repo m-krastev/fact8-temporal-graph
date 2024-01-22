@@ -3,7 +3,7 @@
 #SBATCH --partition=gpu
 #SBATCH --job-name=FACT8_explain
 #SBATCH --output=%A.out
-#SBATCH --time=3:59:00
+#SBATCH --time=12:59:00
 #SBATCH --mem=32G
 #SBATCH --gres=gpu:1
 #SBATCH --gpus=1
@@ -58,47 +58,47 @@ model=tgat
 
 cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
 
-# sim_datasets=(simulate_v2)
+sim_datasets=(simulate_v2)
 # real_datasets=(wikipedia)
 runs=(0)
 
-# for run in ${runs[@]}
-# do
-#     # echo "Iteration no. ${run}\n"
+for run in ${runs[@]}
+do
+    # echo "Iteration no. ${run}\n"
 
-#     # for dataset in ${sim_datasets[@]}
-#     # do
-#     #     echo "dataset: ${dataset}\n"
-#     #     python learn_simulate.py -d ${dataset} --bs 256 --n_degree 10 --n_epoch 90 --agg_method attn --attn_mode prod --gpu 1 --n_head 2 --prefix ${dataset}
+    for dataset in ${sim_datasets[@]}
+    do
+        echo "dataset: ${dataset}\n"
+        python learn_simulate.py -d ${dataset} --bs 256 --n_degree 10 --n_epoch 90 --agg_method attn --attn_mode prod --gpu 1 --n_head 2 --prefix ${dataset}
 
-#     #     epoch=89
-#     #     source_path=./saved_checkpoints/${dataset}-attn-prod-${epoch}.pth
-#     #     target_path=$ROOT/tgnnexplainer/xgraph/models/checkpoints/${model}_${dataset}_best.pth
-#     #     cp ${source_path} ${target_path}
+        epoch=89
+        source_path=./saved_checkpoints/${dataset}-attn-prod-${epoch}.pth
+        target_path=$ROOT/tgnnexplainer/xgraph/models/checkpoints/${model}_${dataset}_best.pth
+        cp ${source_path} ${target_path}
 
-#     #     echo ${source_path} ${target_path} 'copied'
-#     # done
+        echo ${source_path} ${target_path} 'copied'
+    done
 
-#     # for dataset in ${real_datasets[@]}
-#     # do
-#     #     echo "dataset: ${dataset}\n"
-#     #     python learn_edge.py -d ${dataset} --bs 512 --n_degree 10 --n_epoch 10 --agg_method attn --attn_mode prod --gpu 1 --n_head 2 --prefix ${dataset}
+    # for dataset in ${real_datasets[@]}
+    # do
+    #     echo "dataset: ${dataset}\n"
+    #     python learn_edge.py -d ${dataset} --bs 512 --n_degree 10 --n_epoch 10 --agg_method attn --attn_mode prod --gpu 1 --n_head 2 --prefix ${dataset}
 
-#     #         epoch=9
-#     #         source_path=./saved_checkpoints/${dataset}-attn-prod-${epoch}.pth
-
-
-#     #         mkdir -p $ROOT/tgnnexplainer/xgraph/models/checkpoints
-#     #         target_path=$ROOT/tgnnexplainer/xgraph/models/checkpoints/${model}_${dataset}_best.pth
-#     #         cp ${source_path} ${target_path}
-
-#     #         echo ${source_path} ${target_path} 'copied'
-
-#     # done
-# done
+    #         epoch=9
+    #         source_path=./saved_checkpoints/${dataset}-attn-prod-${epoch}.pth
 
 
-ls -l $ROOT/tgnnexplainer/xgraph/models/checkpoints
+    #         mkdir -p $ROOT/tgnnexplainer/xgraph/models/checkpoints
+    #         target_path=$ROOT/tgnnexplainer/xgraph/models/checkpoints/${model}_${dataset}_best.pth
+    #         cp ${source_path} ${target_path}
+
+    #         echo ${source_path} ${target_path} 'copied'
+
+    # done
+done
+
+
+# ls -l $ROOT/tgnnexplainer/xgraph/models/checkpoints
 
 ################################ TGAT ################################
 
@@ -108,13 +108,12 @@ ls -l $ROOT/tgnnexplainer/xgraph/models/checkpoints
 ################################ TGN  ################################
 
 cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgn
+model=tgn
 
-# sim_datasets=(simulate_v1)
-# real_datasets=(reddit)
 runs=(0)
 for run in ${runs[@]}
 do
-    echo "Iteration no. ${run}\n"
+    # echo "Iteration no. ${run}\n"
 
     # for dataset in ${sim_datasets[@]}
     # do
@@ -123,10 +122,9 @@ do
     #     --memory_dim 4 # memory_dim should equal to node/edge feature dim
 
 
-    #     model=tgn
     #     epoch=99
 
-    #     mkdir -p $ROOT/tgnnexplainer/models/checkpoints
+    #     mkdir -p $ROOT/tgnnexplainer/xgraph/models/checkpoints
     #     source_path=./saved_checkpoints/tgn-attn-${dataset}-${epoch}.pth
     #     target_path=$ROOT/tgnnexplainer/models/checkpoints/${model}_${dataset}_best.pth
     #     cp ${source_path} ${target_path}
@@ -136,12 +134,22 @@ do
 
     # done
 
+    # real_datasets=(reddit)
+    # for dataset in ${real_datasets[@]}
+    # do
+    #     echo "dataset: ${dataset}\n"
+    #     python train_self_supervised.py -d ${dataset} --prefix tgn-attn --n_runs 1 --n_epoch 20 --n_layer 2 --n_degree 10 --use_memory --gpu 0
 
-    for dataset in ${real_datasets[@]}
-    do
-        echo "dataset: ${dataset}\n"
-        python train_self_supervised.py -d ${dataset} --prefix tgn-attn --n_runs 1 --n_epoch 20 --n_layer 2 --n_degree 10 --use_memory --gpu 0
-    done
+    #     # Save last epoch
+    #     epoch=19
+    #     mkdir -p $ROOT/tgnnexplainer/xgraph/models/checkpoints
+    #     source_path=./saved_checkpoints/tgn-attn-${dataset}-${epoch}.pth
+    #     target_path=$ROOT/tgnnexplainer/xgraph/models/checkpoints/${model}_${dataset}_best.pth
+    #     cp ${source_path} ${target_path}
+    #     echo ${source_path} ${target_path} 'copied'
+
+    #     ls -l $ROOT/tgnnexplainer/xgraph/models/checkpoints | grep '.*best.pth'
+    # done
 
 done
 
@@ -152,4 +160,21 @@ done
 
 ################################ RUN EVALUATION  ################################
 # cd  $ROOT/benchmarks/xgraph
-# ./run.sh
+
+# models=("tgat tgn")
+# datasets=("wikipedia")
+# for dataset in ${datasets}
+# do
+#     echo "dataset: ${dataset}\n"
+#     for model in ${models}
+#     do
+#         echo "model: ${model}\n"
+#         # ours
+#         python subgraphx_tg_run.py datasets=${dataset} device_id=0 explainers=subgraphx_tg models=${model}
+
+#         # baselines
+#         python subgraphx_tg_run.py datasets=${dataset} device_id=0 explainers=attn_explainer_tg models=${model}
+#         python subgraphx_tg_run.py datasets=${dataset} device_id=0 explainers=pg_explainer_tg models=${model}
+#         python subgraphx_tg_run.py datasets=${dataset} device_id=0 explainers=pbone_explainer_tg models=${model}
+#     done
+# done
