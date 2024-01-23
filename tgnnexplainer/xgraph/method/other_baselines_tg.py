@@ -73,6 +73,18 @@ class PGExplainerExt(BaseExplainerTG):
         self.expl_input_dim = None
         self._init_explainer()
         
+        self.explainer_ckpt_path = self._ckpt_path(self.explainer_ckpt_dir, self.model_name, self.dataset_name, self.explainer_name)
+        # if exists, load. Otherwise train.
+        if self.explainer_ckpt_path.exists():
+            state_dict = torch.load(self.explainer_ckpt_path)
+            self.explainer_model.load_state_dict(state_dict)
+            print(f'explainer ckpt loaded from {str(self.explainer_ckpt_path)}')
+        else:
+            print(f'explainer ckpt not found at {str(self.explainer_ckpt_path)}')
+            print('start training...')
+            self._train()
+            print('training finished')
+
     @staticmethod
     def _create_explainer(model, model_name, device):
         if model_name == 'tgat':
@@ -102,14 +114,6 @@ class PGExplainerExt(BaseExplainerTG):
         self.explainer_model = self._create_explainer(self.model, self.model_name, self.device)
 
     def __call__(self, node_idxs: Union[int, None] = None, event_idxs: Union[int, None] = None):
-        self.explainer_ckpt_path = self._ckpt_path(self.explainer_ckpt_dir, self.model_name, self.dataset_name, self.explainer_name)
-        self.explain_event_idxs = event_idxs
-        
-        if not self.explainer_ckpt_path.exists():
-            self._train() # we need to train the explainer first
-        else:
-            state_dict = torch.load(self.explainer_ckpt_path)
-            self.explainer_model.load_state_dict(state_dict)
 
         results_list = []
         for i, event_idx in enumerate(event_idxs):
@@ -209,9 +213,13 @@ class PGExplainerExt(BaseExplainerTG):
                     skipped_num += 1
                     continue
 
+                # get the outputs of the target model for the given events
                 original_pred, mask_values_ = self._tg_predict(event_idx, use_explainer=False)
+                # get the soft-masked outputs of the target model
+                # soft-masks are computed by the explainer model (which is called navigator in the paper)
                 masked_pred, mask_values = self._tg_predict(event_idx, use_explainer=True)
 
+                # binary cross entropy between the original and masked outputs
                 id_loss = self._loss(masked_pred, original_pred, mask_values, self.reg_coefs)
                 # import ipdb; ipdb.set_trace()
                 id_loss = id_loss.flatten()
@@ -230,9 +238,9 @@ class PGExplainerExt(BaseExplainerTG):
         
             # import ipdb; ipdb.set_trace()
             state_dict = self.explainer_model.state_dict()
-            ckpt_save_path = self._ckpt_path(self.explainer_ckpt_dir, self.model_name, self.dataset_name, self.explainer_name, epoch=e)
-            torch.save(state_dict, ckpt_save_path)
-            tqdm.write(f"epoch {e} loss epoch {np.mean(loss_list)}, skipped: {skipped_num}, ckpt saved: {ckpt_save_path}")
+
+            torch.save(state_dict, self.explainer_ckpt_path)
+            tqdm.write(f"epoch {e} loss epoch {np.mean(loss_list)}, skipped: {skipped_num}, ckpt saved: {self.explainer_ckpt_path}")
 
         state_dict = self.explainer_model.state_dict()
         torch.save(state_dict, self.explainer_ckpt_path)
