@@ -63,7 +63,7 @@ class MCTSNode(object):
                  ):
         self.coalition = coalition  # in our case, the coalition should be edge indices?
         self.c_puct = c_puct
-        self.children = []
+        self.children = set()
         self.created_by_remove = created_by_remove # created by remove which edge from its parents
         self.W = W  # sum of node value
         self.N = N  # times of arrival
@@ -101,18 +101,18 @@ class MCTSNode(object):
         self.P = info_dict['P']
         self.Sparsity = info_dict['Sparsity']
 
-        self.children = []
+        self.children = set()
         return self
 
 
-def compute_scores(score_func, base_events, children, target_event_idx):
+def compute_scores(score_func, base_events, children, state_dict, target_event_idx):
     results = []
     for child in children:
-        if child.P == 0:
+        if state_dict[child].P == 0:
             # score = score_func(child.coalition, child.data)
-            score = score_func( base_events + child.coalition, target_event_idx)
+            score = score_func( base_events + state_dict[child].coalition, target_event_idx)
         else:
-            score = child.P
+            score = state_dict[child].P
         results.append(score)
     return results
 
@@ -209,7 +209,7 @@ class MCTS(object):
         if len(tree_node.children) != len(tree_node.coalition):
             # expand_events = tree_node.coalition
             
-            exist_children = set(map( lambda x: x.created_by_remove, tree_node.children ))
+            exist_children = set(map( lambda x: self.state_map[x].created_by_remove, tree_node.children ))
             not_exist_children = list(filter(lambda e_idx:e_idx not in exist_children, tree_node.coalition ) )
             
             expand_events = self._select_expand_candidates(not_exist_children)
@@ -224,19 +224,18 @@ class MCTS(object):
             
             # expand_events = [expand_events[0], ]
 
+            # linear seach for the highest score event (according to navigator),
+            # which is not an existing child of the current node.
             for event in expand_events:
                 important_events = [e_idx for e_idx in tree_node.coalition if e_idx != event ]
 
                 # check the state map and merge the same sub-tg-graph (node in the tree)
-                find_same = False
                 subnode_coalition_key = self._node_key(important_events)
-                for key in self.state_map.keys():
-                    if key == subnode_coalition_key:
-                        new_tree_node = self.state_map[key]
-                        find_same = True
-                        break
-                
-                if not find_same:
+                find_same = subnode_coalition_key in self.state_map
+
+                if find_same:
+                    new_tree_node = self.state_map[subnode_coalition_key]
+                else:
                     # new_tree_node = self.MCTSNodeClass(
                     #     coalition=important_events, created_by_remove=event)
                     new_tree_node = MCTSNode(
@@ -247,42 +246,36 @@ class MCTS(object):
                         )
 
                     self.state_map[subnode_coalition_key] = new_tree_node
-                
-                # find same child ?
-                find_same_child = False
-                for child in tree_node.children:
-                    if self._node_key(child.coalition) == self._node_key(new_tree_node.coalition):
-                        find_same_child = True
-                        break
-                if not find_same_child:
-                    tree_node.children.append(new_tree_node)
 
-                # coutinue until one valid child is expanded, otherewize this rollout will be wasted
-                if not find_same:
-                    break
-                else: continue
-            
+                # find same child ?
+                # coutinue until one valid child is expanded, otherwise this rollout will be wasted
+                find_same_child = subnode_coalition_key in tree_node.children
+                if not find_same_child:
+                    tree_node.children.add(subnode_coalition_key)
+                    break # valid child found
+
             # compute scores of all children
-            scores = compute_scores(self.score_func, self.base_events, tree_node.children, self.event_idx)
+            scores = compute_scores(self.score_func, self.base_events, tree_node.children, self.state_map, self.event_idx)
             # import ipdb; ipdb.set_trace()
             for child, score in zip(tree_node.children, scores):
-                child.P = score
+                self.state_map[child].P = score
 
         # import ipdb; ipdb.set_trace()
 
         # If this node has children (it has been visited), then directly select one child
-        sum_count = sum([c.N for c in tree_node.children])
+        sum_count = sum([self.state_map[c].N for c in tree_node.children])
         # import ipdb; ipdb.set_trace()
         # selected_node = max(tree_node.children, key=lambda x: x.Q() + x.U(sum_count))
-        selected_node = max(tree_node.children, key=lambda x: self._compute_node_score(x, sum_count))
-        
-        v = self.mcts_rollout(selected_node)
-        selected_node.W += v
-        selected_node.N += 1
+        selected_node = max(tree_node.children, key=lambda x: self._compute_node_score(self.state_map[x], sum_count))
+
+        v = self.mcts_rollout(self.state_map[selected_node]) # recur
+        self.state_map[selected_node].W += v
+        self.state_map[selected_node].N += 1
         return v
-    
+
     def _select_expand_candidates(self, not_exist_children):
         assert self.candidate_initial_weights is not None
+        # SORT by candidate weights (computed by the navigator)
         return sorted(not_exist_children, key=self.candidate_initial_weights.get)
 
         
@@ -456,8 +449,8 @@ class SubgraphXTG(BaseExplainerTG):
                                        min_atoms=self.min_atoms,
                                        c_puct=self.c_puct,
                                        score_func=self.tgnn_reward_wraper,
-                                       device=self.device,
-                                       candidate_initial_weights=self.candidate_initial_weights, # BUG: never pass through this parameter?????
+                                    #    device=self.device,
+                                       candidate_initial_weights=self.candidate_initial_weights
                                     )
             
             if self.debug_mode:
@@ -468,8 +461,8 @@ class SubgraphXTG(BaseExplainerTG):
 
         else: raise NotImplementedError('Wrong explanaion level')
 
-        tree_node_x = find_best_node_result(tree_nodes, self.min_atoms)
-        tree_nodes = sorted(tree_nodes, key=lambda x:x.P)
+        tree_node_x = find_best_node_result(tree_nodes, self.min_atoms) # best fidelity
+        tree_nodes = sorted(tree_nodes, key=lambda x:x.P) # sort by reward (?)
 
         if self.debug_mode:
             print_nodes(tree_nodes)
@@ -494,6 +487,7 @@ class SubgraphXTG(BaseExplainerTG):
 
     @staticmethod
     def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix):
+        result_dir = result_dir / "candidate_scores"
         if suffix is not None:
             record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{suffix}.csv'
         else:
@@ -515,6 +509,7 @@ class SubgraphXTG(BaseExplainerTG):
         recorder_df = pd.DataFrame(self.mcts_state_map.recorder)
         # ROOT_DIR.parent/'benchmarks'/'results'
         record_filename = self._mcts_recorder_path(self.results_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
+        record_filename.parent.mkdir(parents=True, exist_ok=True)
         recorder_df.to_csv(record_filename, index=False)
 
         print(f'mcts recorder saved at {str(record_filename)}')
@@ -549,18 +544,22 @@ class SubgraphXTG(BaseExplainerTG):
         input_expl = _create_explainer_input(self.model, self.model_name, self.all_events, \
                     candidate_events=self.candidate_events, event_idx=event_idx, device=self.device)
         
-        edge_weights = self.pg_explainer_model(input_expl) # compute importance scores
-        # event_idx_scores = event_idx_scores.cpu().detach().numpy().flatten()
+        # compute soft-masks for the candidate input events
+        edge_weights = self.pg_explainer_model(input_expl)
+        # # event_idx_scores = event_idx_scores.cpu().detach().numpy().flatten()
 
 
-        ################### added to original model attention scores
-        candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
-                                    'edge_weights': edge_weights,
-                }
-        src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(self.all_events, event_idx)
-        output = self.model.get_prob( src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
-        e_idx_weight_dict = AttnExplainerTG._agg_attention(self.model, self.model_name)
-        edge_weights = np.array([ e_idx_weight_dict[e_idx] for e_idx in candidate_events ])
+        # ################### added to original model attention scores
+        # candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
+        #                             'edge_weights': edge_weights,
+        #         }
+        # src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(self.all_events, event_idx)
+        # # run forward pass on the target model with soft-masks applied to the input events
+        # output = self.model.get_prob( src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
+        # # obtain aggregated attention scores for the masked candidate input events
+        # e_idx_weight_dict = AttnExplainerTG._agg_attention(self.model, self.model_name)
+        # # final edge weights are the aggregated attention scores masked by the pre-trained navigator
+        # edge_weights = np.array([ e_idx_weight_dict[e_idx] for e_idx in candidate_events ])
         ################### added to original model attention scores
 
         if not self.pg_positive:
