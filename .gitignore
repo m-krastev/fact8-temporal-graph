@@ -170,3 +170,5 @@ explain_index
 tgnnexplainer/xgraph/dataset/data/wikipedia.csv
 tgnnexplainer/xgraph/dataset/data/reddit.csv
 *.pkl
+
+new_dir

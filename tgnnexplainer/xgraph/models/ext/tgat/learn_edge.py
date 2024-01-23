@@ -58,6 +58,7 @@ parser.add_argument("--n_layer", type=int, default=2, help="number of network la
 parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
 parser.add_argument("--drop_out", type=float, default=0.1, help="dropout probability")
 parser.add_argument("--gpu", type=int, default=0, help="idx for the gpu to use")
+parser.add_argument("--device", type=str, default=None, help="device to use")
 parser.add_argument(
     "--node_dim", type=int, default=100, help="Dimentions of the node embedding"
 )
@@ -288,10 +289,15 @@ nn_test_rand_sampler = RandEdgeSampler(nn_test_src_l, nn_test_dst_l)
 
 
 ### Model initialize
-if torch.cuda.is_available():
-    device = torch.device("cuda")
+if args.device:
+    device = torch.device(args.device)
 else:
-    device = torch.device("cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        device = torch.device("mps")
+    else:
+        device = torch.device("cpu")
 tgan = TGAN(
     train_ngh_finder,
     n_feat,

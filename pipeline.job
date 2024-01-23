@@ -16,7 +16,6 @@ module load 2023
 module load Python/3.11.3-GCCcore-12.3.0
 
 # Activate your environment
-source /home/scur1382/fact8/.venv/bin/activate
 
 # Print current datetime for debug purposes
 date
@@ -25,6 +24,7 @@ date
 export ROOT="/home/scur1382/fact8" # change with your root folder
 export PYTHONPATH=$ROOT:$PYTHONPATH:.
 
+source $ROOT/.venv/bin/activate
 
 # simulate_v1, simulate_v2, wikipedia, reddit
 sim_datasets=(simulate_v1 simulate_v2)
