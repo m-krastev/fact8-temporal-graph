@@ -1,0 +1,23 @@
+
+results_save: False
+results_dir: ''
+mcts_saved_dir: ''
+load_results: False
+use_gpu: True
+explainer_name: 'attn_explainer_v2'
+debug_mode: False
+explainer_ckpt_dir: ''
+
+param:
+  wikipedia:
+    explanation_level: 'event'
+    verbose: True
+  reddit:
+    explanation_level: 'event'
+    verbose: True
+  simulate_v1:
+    explanation_level: 'event'
+    verbose: True
+  simulate_v2:
+    explanation_level: 'event'
+    verbose: True

@@ -235,7 +235,21 @@ def pipeline(config: DictConfig):
             results_dir=config.explainers.results_dir,
             debug_mode=config.explainers.debug_mode,
         )
-    elif config.explainers.explainer_name == "pbone_explainer_tg":
+    elif config.explainers.explainer_name == 'attn_explainer_v2':
+        # added later
+        from tgnnexplainer.xgraph.method.attn_explainer_tg import AttnExplainerV2
+        explainer = AttnExplainerV2(
+                                model,
+                                config.models.model_name,
+                                config.explainers.explainer_name,
+                                config.datasets.dataset_name,
+                                events,
+                                config.explainers.param.explanation_level,
+                                device=device,
+                                results_dir=config.explainers.results_dir,
+                                debug_mode=config.explainers.debug_mode,
+        )
+    elif config.explainers.explainer_name == 'pbone_explainer_tg':
         from tgnnexplainer.xgraph.method.other_baselines_tg import PBOneExplainerTG
 
         explainer = PBOneExplainerTG(
