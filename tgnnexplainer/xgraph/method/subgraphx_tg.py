@@ -449,7 +449,7 @@ class SubgraphXTG(BaseExplainerTG):
                                        min_atoms=self.min_atoms,
                                        c_puct=self.c_puct,
                                        score_func=self.tgnn_reward_wraper,
-                                       device=self.device,
+                                    #    device=self.device,
                                        candidate_initial_weights=self.candidate_initial_weights
                                     )
             
