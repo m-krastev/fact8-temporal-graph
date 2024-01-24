@@ -110,9 +110,9 @@ def compute_scores(score_func, base_events, children, state_dict, target_event_i
     for child in children:
         if state_dict[child].P == 0:
             # score = score_func(child.coalition, child.data)
-            score = score_func( base_events + child.coalition, target_event_idx)
+            score = score_func( base_events + state_dict[child].coalition, target_event_idx)
         else:
-            score = child.P
+            score = state_dict[child].P
         results.append(score)
     return results
 
@@ -544,20 +544,20 @@ class SubgraphXTG(BaseExplainerTG):
         
         # compute soft-masks for the candidate input events
         edge_weights = self.pg_explainer_model(input_expl)
-        # event_idx_scores = event_idx_scores.cpu().detach().numpy().flatten()
+        # # event_idx_scores = event_idx_scores.cpu().detach().numpy().flatten()
 
 
-        ################### added to original model attention scores
-        candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
-                                    'edge_weights': edge_weights,
-                }
-        src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(self.all_events, event_idx)
-        # run forward pass on the target model with soft-masks applied to the input events
-        output = self.model.get_prob( src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
-        # obtain aggregated attention scores for the masked candidate input events
-        e_idx_weight_dict = AttnExplainerTG._agg_attention(self.model, self.model_name)
-        # final edge weights are the aggregated attention scores masked by the pre-trained navigator
-        edge_weights = np.array([ e_idx_weight_dict[e_idx] for e_idx in candidate_events ])
+        # ################### added to original model attention scores
+        # candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
+        #                             'edge_weights': edge_weights,
+        #         }
+        # src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(self.all_events, event_idx)
+        # # run forward pass on the target model with soft-masks applied to the input events
+        # output = self.model.get_prob( src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
+        # # obtain aggregated attention scores for the masked candidate input events
+        # e_idx_weight_dict = AttnExplainerTG._agg_attention(self.model, self.model_name)
+        # # final edge weights are the aggregated attention scores masked by the pre-trained navigator
+        # edge_weights = np.array([ e_idx_weight_dict[e_idx] for e_idx in candidate_events ])
         ################### added to original model attention scores
 
         if not self.pg_positive:
