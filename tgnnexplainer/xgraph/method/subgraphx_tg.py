@@ -269,8 +269,8 @@ class MCTS(object):
         selected_node = max(tree_node.children, key=lambda x: self._compute_node_score(self.state_map[x], sum_count))
 
         v = self.mcts_rollout(self.state_map[selected_node]) # recur
-        selected_node.W += v
-        selected_node.N += 1
+        self.state_map[selected_node].W += v
+        self.state_map[selected_node].N += 1
         return v
 
     def _select_expand_candidates(self, not_exist_children):
