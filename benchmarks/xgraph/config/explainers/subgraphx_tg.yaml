@@ -18,24 +18,24 @@ param:
     explanation_level: 'event'
     verbose: True
     rollout: 500
-    c_puct: 100
+    c_puct: 5
     min_atoms: 100
   reddit:
     explanation_level: 'event'
     verbose: True
     rollout: 500
-    c_puct: 100
+    c_puct: 5
     min_atoms: 6
   simulate_v1:
     explanation_level: 'event'
     verbose: True
     rollout: 500
-    c_puct: 100
+    c_puct: 5
     min_atoms: 20 # only influence use_pg_explainer's fidelity-rollout curve
   simulate_v2:
     explanation_level: 'event'
     verbose: True
     rollout: 500
-    c_puct: 100
+    c_puct: 5
     min_atoms: 20
   
