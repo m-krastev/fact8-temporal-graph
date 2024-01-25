@@ -16,6 +16,17 @@ from tgnnexplainer.xgraph.models.ext.tgn.utils.data_processing import (
 )
 from tgnnexplainer import ROOT_DIR
 
+def seed_everything(seed=42):
+    import random
+    import numpy as np
+    import torch
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if use multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 def start_multi_process(explainer, target_event_idxs, parallel_degree):
     mp.set_start_method("spawn")
@@ -58,6 +69,9 @@ def start_multi_process(explainer, target_event_idxs, parallel_degree):
 
 @hydra.main(config_path="config", config_name="config")
 def pipeline(config: DictConfig):
+    # SEED
+    seed_everything(config.seed)
+    
     # model config
     config.models.param = config.models.param[config.datasets.dataset_name]
     config.models.ckpt_path = str(
