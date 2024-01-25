@@ -162,12 +162,17 @@ def pipeline(config: DictConfig):
         from tgnnexplainer.xgraph.method.subgraphx_tg import SubgraphXTG
         from tgnnexplainer.xgraph.method.other_baselines_tg import PGExplainerExt
 
-
-        explainer_ckpt_path = PGExplainerExt._ckpt_path(ckpt_dir=config.explainers.explainer_ckpt_dir, model_name=config.models.model_name, dataset_name=config.datasets.dataset_name, explainer_name="pg_explainer_tg")
+        explainer_ckpt_path = PGExplainerExt._ckpt_path(
+            ckpt_dir=config.explainers.explainer_ckpt_dir,
+            model_name=config.models.model_name,
+            dataset_name=config.datasets.dataset_name,
+            explainer_name="pg_explainer_tg",
+        )
 
         if not explainer_ckpt_path.exists():
+            print("train pg_explainer_tg")
 
-            explainer = PGExplainerExt(
+            pg_explainer_model = PGExplainerExt(
                 model,
                 config.models.model_name,
                 config.explainers.explainer_name,
@@ -183,17 +188,18 @@ def pipeline(config: DictConfig):
                 lr=config.explainers.param.lr,
                 debug_mode=config.explainers.debug_mode,
             )
-            
+            pg_explainer_model = pg_explainer_model.explainer_model
+
         else:
-            explainer = PGExplainerExt.expose_explainer_model(
-            model,  # load a trained mlp model
-            model_name=config.models.model_name,
-            explainer_name="pg_explainer_tg",  # fixed
-            dataset_name=config.datasets.dataset_name,
-            ckpt_dir=config.explainers.explainer_ckpt_dir,
-            device=device,
-        )
-        print("used pg_explainer_tg ckpt:", explainer_ckpt_path)
+            print("used pg_explainer_tg ckpt:", explainer_ckpt_path)
+            pg_explainer_model, explainer_ckpt_path = PGExplainerExt.expose_explainer_model(
+                model,  # load a trained mlp model
+                model_name=config.models.model_name,
+                explainer_name="pg_explainer_tg",  # fixed
+                dataset_name=config.datasets.dataset_name,
+                ckpt_dir=config.explainers.explainer_ckpt_dir,
+                device=device,
+            )
 
         assert config.explainers.parallel_degree >= 1
         explainer = [

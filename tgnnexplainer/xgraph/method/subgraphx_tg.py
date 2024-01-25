@@ -487,6 +487,7 @@ class SubgraphXTG(BaseExplainerTG):
 
     @staticmethod
     def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix):
+        result_dir = result_dir / "candidate_scores"
         if suffix is not None:
             record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{suffix}.csv'
         else:
@@ -508,6 +509,7 @@ class SubgraphXTG(BaseExplainerTG):
         recorder_df = pd.DataFrame(self.mcts_state_map.recorder)
         # ROOT_DIR.parent/'benchmarks'/'results'
         record_filename = self._mcts_recorder_path(self.results_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
+        record_filename.parent.mkdir(parents=True, exist_ok=True)
         recorder_df.to_csv(record_filename, index=False)
 
         print(f'mcts recorder saved at {str(record_filename)}')

@@ -149,7 +149,9 @@ class BaseExplainerTG(object):
         """
         only for baseline explainer, save their computed candidate scores.
         """
-        score_filename = results_dir/f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores.csv'
+        savepath = results_dir / "candidate_scores"
+        savepath.mkdir(parents=True, exist_ok=True)
+        score_filename = savepath / f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores.csv'
         return score_filename
 
     def _save_candidate_scores(self, candidate_weights, event_idx):
