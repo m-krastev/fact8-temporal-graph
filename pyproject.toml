@@ -24,3 +24,7 @@ version = "0.1.1-dev"
 dependencies = [
     "scipy","shap", "IPython", "tqdm", "rdkit", "pandas", "sympy", "hydra-core", "torch", "matplotlib", "torch_geometric"
 ]
+
+[tool.setuptools]
+packages=["tgnnexplainer"]
+
