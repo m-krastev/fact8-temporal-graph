@@ -382,7 +382,7 @@ class SubgraphXTG(BaseExplainerTG):
                 rollout: int = 20, min_atoms: int = 1, c_puct: float = 10.0,
                 # expand_atoms=14,
                 load_results=False, mcts_saved_dir: Optional[str] = None, save_results: bool= True,
-                pg_explainer_model=None, pg_positive=True,
+                navigator=None, pg_positive=True,
                 ):
 
         super(SubgraphXTG, self).__init__(model=model, 
@@ -408,9 +408,9 @@ class SubgraphXTG(BaseExplainerTG):
         self.mcts_saved_dir = mcts_saved_dir # dir for saving mcts nodes, not evaluation results ( e.g., fidelity )
         # self.mcts_saved_filename = mcts_saved_filename
         self.save = save_results
-        self.pg_explainer_model = pg_explainer_model # to assign initial weights using a trained pg_explainer_tg
+        self.navigator = navigator # to assign initial weights using a trained pg_explainer_tg
         self.pg_positive = pg_positive
-        self.suffix = self._path_suffix(pg_explainer_model, pg_positive)
+        self.suffix = self._path_suffix(navigator, pg_positive)
 
     @staticmethod
     def read_from_MCTSInfo_list(MCTSInfo_list):
@@ -470,13 +470,13 @@ class SubgraphXTG(BaseExplainerTG):
         return tree_nodes, tree_node_x
     
     @staticmethod
-    def _path_suffix(pg_explainer_model, pg_positive):
-        if pg_explainer_model is not None:
+    def _path_suffix(navigator, pg_positive):
+        if navigator is not None:
             suffix = 'pg_true'
         else:
             suffix = 'pg_false'
         
-        if pg_explainer_model is not None:
+        if navigator is not None:
             if pg_positive is True:
                 suffix += '_pg_positive'
             else:
@@ -534,46 +534,23 @@ class SubgraphXTG(BaseExplainerTG):
         return tree_nodes, tree_node_x
 
     def _set_candidate_weights(self, event_idx):
-        # save candidates' initial weights computed by the pg_explainer_tg
-        from tgnnexplainer.xgraph.method.tg_score import _set_tgat_data
-        from tgnnexplainer.xgraph.method.attn_explainer_tg import AttnExplainerTG
+        """
+            Set candidate weights using the pre-trained navigator
+        """
 
         candidate_events = self.candidate_events
 
-        self.pg_explainer_model.eval() # mlp
-        input_expl = _create_explainer_input(self.model, self.model_name, self.all_events, \
-                    candidate_events=self.candidate_events, event_idx=event_idx, device=self.device)
-        
-        # compute soft-masks for the candidate input events
-        edge_weights = self.pg_explainer_model(input_expl)
-        # # event_idx_scores = event_idx_scores.cpu().detach().numpy().flatten()
-
-
-        # ################### added to original model attention scores
-        # candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
-        #                             'edge_weights': edge_weights,
-        #         }
-        # src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(self.all_events, event_idx)
-        # # run forward pass on the target model with soft-masks applied to the input events
-        # output = self.model.get_prob( src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
-        # # obtain aggregated attention scores for the masked candidate input events
-        # e_idx_weight_dict = AttnExplainerTG._agg_attention(self.model, self.model_name)
-        # # final edge weights are the aggregated attention scores masked by the pre-trained navigator
-        # edge_weights = np.array([ e_idx_weight_dict[e_idx] for e_idx in candidate_events ])
-        ################### added to original model attention scores
+        edge_weights = self.navigator(candidate_events, event_idx)
 
         if not self.pg_positive:
             edge_weights = -1 * edge_weights
         
-        # import ipdb; ipdb.set_trace()
-
-        # event_idx_scores = np.random.random(size=(len(event_idx_scores,))) # ??
         candidate_initial_weights = { candidate_events[i]: edge_weights[i] for i in range(len(candidate_events)) }
         self.candidate_initial_weights = candidate_initial_weights
 
     def _initialize(self, event_idx):
         super(SubgraphXTG, self)._initialize(event_idx)
-        if self.pg_explainer_model is not None: # use pg model 
+        if self.navigator is not None: # use pg model 
             self._set_candidate_weights(event_idx)
 
 

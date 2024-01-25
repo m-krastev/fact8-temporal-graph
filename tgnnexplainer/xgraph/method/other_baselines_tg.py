@@ -259,17 +259,9 @@ class PGExplainerExt(BaseExplainerTG):
         candidate_weights = dict( sorted(candidate_weights.items(), key=lambda x: x[1], reverse=True) ) # NOTE: descending, important
 
         return candidate_weights
-    
-    @staticmethod
-    def expose_explainer_model(model, model_name, explainer_name, dataset_name, ckpt_dir, device):
-        explainer_model = PGExplainerExt._create_explainer(model, model_name, device)
-        explainer_ckpt_path = PGExplainerExt._ckpt_path(ckpt_dir, model_name, dataset_name, explainer_name)
 
-        state_dict = torch.load(explainer_ckpt_path)
-        explainer_model.load_state_dict(state_dict)
-
-        return explainer_model, explainer_ckpt_path
-
+    def expose_explainer_model(self):
+        return self.explainer_model # torch.nn.Sequential
 
 class PBOneExplainerTG(BaseExplainerTG):
     """

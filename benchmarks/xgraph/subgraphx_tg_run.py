@@ -155,51 +155,29 @@ def pipeline(config: DictConfig):
     model.load_state_dict(state_dict, strict=False)
     model.to(device)
 
-    # construct a pg_explainer_tg, the mcts_tg explainer may use it
+    # construct an MLPNavigator, the mcts_tg explainer may use it
     if (
         config.explainers.explainer_name == "subgraphx_tg"
     ):  # DONE: test this 'use_pg_explainer'
         from tgnnexplainer.xgraph.method.subgraphx_tg import SubgraphXTG
-        from tgnnexplainer.xgraph.method.other_baselines_tg import PGExplainerExt
+        from tgnnexplainer.xgraph.method.navigators import MLPNavigator
 
-        explainer_ckpt_path = PGExplainerExt._ckpt_path(
-            ckpt_dir=config.explainers.explainer_ckpt_dir,
-            model_name=config.models.model_name,
-            dataset_name=config.datasets.dataset_name,
-            explainer_name="pg_explainer_tg",
+        navigator = MLPNavigator(
+            model,
+            config.models.model_name,
+            config.explainers.explainer_name,
+            config.datasets.dataset_name,
+            events,
+            config.explainers.param.explanation_level,
+            device=device,
+            results_dir=config.explainers.results_dir,
+            debug_mode=config.explainers.debug_mode,
+            train_epochs=config.explainers.param.train_epochs,
+            explainer_ckpt_dir=config.explainers.explainer_ckpt_dir,
+            reg_coefs=config.explainers.param.reg_coefs,
+            batch_size=config.explainers.param.batch_size,
+            lr=config.explainers.param.lr
         )
-
-        if not explainer_ckpt_path.exists():
-            print("train pg_explainer_tg")
-
-            pg_explainer_model = PGExplainerExt(
-                model,
-                config.models.model_name,
-                config.explainers.explainer_name,
-                config.datasets.dataset_name,
-                events,
-                config.explainers.param.explanation_level,
-                device=device,
-                results_dir=config.explainers.results_dir,
-                train_epochs=config.explainers.param.train_epochs,
-                explainer_ckpt_dir=config.explainers.explainer_ckpt_dir,
-                reg_coefs=config.explainers.param.reg_coefs,
-                batch_size=config.explainers.param.batch_size,
-                lr=config.explainers.param.lr,
-                debug_mode=config.explainers.debug_mode,
-            )
-            pg_explainer_model = pg_explainer_model.explainer_model
-
-        else:
-            print("used pg_explainer_tg ckpt:", explainer_ckpt_path)
-            pg_explainer_model, explainer_ckpt_path = PGExplainerExt.expose_explainer_model(
-                model,  # load a trained mlp model
-                model_name=config.models.model_name,
-                explainer_name="pg_explainer_tg",  # fixed
-                dataset_name=config.datasets.dataset_name,
-                ckpt_dir=config.explainers.explainer_ckpt_dir,
-                device=device,
-            )
 
         assert config.explainers.parallel_degree >= 1
         explainer = [
@@ -219,8 +197,8 @@ def pipeline(config: DictConfig):
                 rollout=config.explainers.param.rollout,
                 min_atoms=config.explainers.param.min_atoms,
                 c_puct=config.explainers.param.c_puct,
-                pg_explainer_model=pg_explainer_model
-                if config.explainers.use_pg_explainer
+                navigator=navigator
+                if config.explainers.use_navigator
                 else None,
                 pg_positive=config.explainers.pg_positive,
             )

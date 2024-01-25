@@ -7,7 +7,7 @@ use_gpu: True
 explainer_name: 'subgraphx_tg'
 debug_mode: False
 explainer_ckpt_dir: ''
-use_pg_explainer: True
+use_navigator: True
 pg_positive: True
 
 
