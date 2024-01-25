@@ -209,6 +209,7 @@ def pipeline(config: DictConfig):
                 mcts_saved_dir=config.explainers.mcts_saved_dir,
                 load_results=config.explainers.load_results,
                 rollout=config.explainers.param.rollout,
+                threshold_num=config.explainers.param.threshold_num,
                 min_atoms=config.explainers.param.min_atoms,
                 c_puct=config.explainers.param.c_puct,
                 navigator=navigator
