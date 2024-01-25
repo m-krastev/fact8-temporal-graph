@@ -10,8 +10,8 @@ from tgnnexplainer.xgraph.method.tg_score import TGNNRewardWraper
 from tgnnexplainer.xgraph.dataset.utils_dataset import k_hop_temporal_subgraph
 
 class BaseExplainerTG(object):
-    def __init__(self, model: Union[TGAN, None], model_name: str, explainer_name: str, dataset_name: str, all_events: str, explanation_level: str, device, 
-                verbose: bool = True, results_dir: Optional[str] = None, debug_mode: bool=True) -> None:
+    def __init__(self, model: Union[TGAN, None], model_name: str, explainer_name: str, dataset_name: str, all_events: str, explanation_level: str, device,
+                verbose: bool = True, results_dir: Optional[str] = None, debug_mode: bool=True, threshold_num=20) -> None:
         """
         results_dir: dir for saving value results, e.g., fidelity_sparsity. Not mcts_node_list
         """
@@ -22,12 +22,13 @@ class BaseExplainerTG(object):
         self.all_events = all_events
         self.num_users = all_events.iloc[:, 0].max() + 1
         self.explanation_level = explanation_level
-        
+
         self.device = device
         self.verbose = verbose
         self.results_dir = Path(results_dir)
         self.debug_mode = debug_mode
-        
+        self.threshold_num = threshold_num
+
         self.model.eval()
         self.model.to(self.device)
 
@@ -54,23 +55,23 @@ class BaseExplainerTG(object):
             accu_e_idx = [ ] # NOTE: important?
             accu_node = [ [u, i,] ]
             accu_ts = [ [ts, ts,] ]
-            
+
             for i in range(num_layers):
                 last_nodes = accu_node[-1]
                 last_ts = accu_ts[-1]
                 # import ipdb; ipdb.set_trace()
 
                 out_ngh_node_batch, out_ngh_eidx_batch, out_ngh_t_batch = ngh_finder.get_temporal_neighbor(
-                                                                                    last_nodes, 
-                                                                                    last_ts, 
+                                                                                    last_nodes,
+                                                                                    last_ts,
                                                                                     num_neighbors=num_neighbors,
                                                                                     edge_idx_preserve_list=edge_idx_preserve_list, # NOTE: not needed?
                                                                                     )
-                
+
                 out_ngh_node_batch = out_ngh_node_batch.flatten()
                 out_ngh_eidx_batch = out_ngh_eidx_batch.flatten()
                 out_ngh_t_batch = out_ngh_t_batch.flatten()
-                
+
                 mask = out_ngh_node_batch != 0
                 out_ngh_node_batch = out_ngh_node_batch[mask]
                 out_ngh_eidx_batch = out_ngh_eidx_batch[mask]
@@ -80,7 +81,7 @@ class BaseExplainerTG(object):
 
                 out_ngh_node_batch = out_ngh_node_batch.tolist()
                 out_ngh_t_batch = out_ngh_t_batch.tolist()
-                out_ngh_eidx_batch = (out_ngh_eidx_batch).tolist() 
+                out_ngh_eidx_batch = (out_ngh_eidx_batch).tolist()
 
                 accu_node.append(out_ngh_node_batch)
                 accu_ts.append(out_ngh_t_batch)
@@ -94,23 +95,23 @@ class BaseExplainerTG(object):
 
             # TODO: to test self.base_events = unique_e_idx, will this influence the speed?
 
-            
+
         else:
             raise NotImplementedError
-        
+
         candidate_events = unique_e_idx
-        threshold_num = 20
-        if len(candidate_events) > threshold_num:
-            candidate_events = candidate_events[-threshold_num:]
+        threshold = self.threshold_num
+        if len(candidate_events) > threshold:
+            candidate_events = candidate_events[-threshold:]
             candidate_events = sorted(candidate_events)
         # import ipdb; ipdb.set_trace()
-        
+
         if self.debug_mode:
             print(f'{len(unique_e_idx)} seen events, used {len(candidate_events)} as candidates:')
             print(candidate_events)
-        
+
         return candidate_events, unique_e_idx
-    
+
     def _set_ori_subgraph(self, num_hops, event_idx):
         subgraph_df = k_hop_temporal_subgraph(self.all_events, num_hops=num_hops, event_idx=event_idx)
         self.ori_subgraph_df = subgraph_df
@@ -133,7 +134,7 @@ class BaseExplainerTG(object):
         assert hasattr(self, 'ori_subgraph_df')
         # self.tgnn_reward_wraper.compute_original_score(self.ori_subgraph_df.e_idx.values, event_idx)
         self.tgnn_reward_wraper.compute_original_score(self.base_events+self.candidate_events, event_idx)
-    
+
     def _initialize(self, event_idx):
         self._set_ori_subgraph(num_hops=3, event_idx=event_idx)
         self._set_candidate_events(event_idx)
@@ -142,16 +143,14 @@ class BaseExplainerTG(object):
         np.random.seed(1)
         self.candidate_initial_weights = { e_idx: np.random.random() for e_idx in self.candidate_events }
 
-        
+
 
     @staticmethod
     def _score_path(results_dir, model_name, dataset_name, explainer_name, event_idx,):
         """
         only for baseline explainer, save their computed candidate scores.
         """
-        savepath = results_dir / "candidate_scores"
-        savepath.mkdir(parents=True, exist_ok=True)
-        score_filename = savepath / f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores.csv'
+        score_filename = results_dir/f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores.csv'
         return score_filename
 
     def _save_candidate_scores(self, candidate_weights, event_idx):
@@ -167,9 +166,7 @@ class BaseExplainerTG(object):
         for k, v in candidate_weights.items():
             data_dict['candidates'].append(k)
             data_dict['scores'].append(v)
-        
+
         df = DataFrame(data_dict)
         df.to_csv(filename, index=False)
         print(f'candidate scores saved at {filename}')
-
-

@@ -19,50 +19,26 @@ param:
     verbose: True
     rollout: 500
     c_puct: 100
+    threshold_num: 20
     min_atoms: 100
-    
-    train_epochs: 100 # 20
-    reg_coefs:
-      - 0.5
-      - 0.1
-    batch_size: 16
-    lr: 1e-4
   reddit:
     explanation_level: 'event'
     verbose: True
     rollout: 500
     c_puct: 100
+    threshold_num: 20
     min_atoms: 6
-    
-    train_epochs: 30 # 20
-    reg_coefs:
-      - 0.5
-      - 0.1
-    batch_size: 16
-    lr: 1e-4
   simulate_v1:
     explanation_level: 'event'
     verbose: True
     rollout: 500
     c_puct: 100
+    threshold_num: 20
     min_atoms: 20 # only influence use_pg_explainer's fidelity-rollout curve
-    train_epochs: 20 # 20
-    reg_coefs:
-      - 0.5
-      - 0.1
-    batch_size: 16
-    lr: 1e-4
   simulate_v2:
     explanation_level: 'event'
     verbose: True
     rollout: 500
     c_puct: 100
+    threshold_num: 20
     min_atoms: 20
-
-    train_epochs: 20 # 20
-    reg_coefs:
-      - 0.5
-      - 0.1
-    batch_size: 16
-    lr: 1e-4
-  
