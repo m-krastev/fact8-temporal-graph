@@ -1,4 +1,5 @@
 from random import random
+from time import time
 from typing import Union
 from pandas import DataFrame
 from pathlib import Path
@@ -119,10 +120,13 @@ class PGExplainerExt(BaseExplainerTG):
         for i, event_idx in enumerate(event_idxs):
             print(f'\nexplain {i}-th: {event_idx}')
             self._initialize(event_idx)
+            
+            tick = time()
             candidate_weights = self.explain(event_idx=event_idx)
+            tock= time() - tick
             results_list.append( [ list(candidate_weights.keys()), list(candidate_weights.values()) ] )
 
-            self._save_candidate_scores(candidate_weights, event_idx)
+            self._save_candidate_scores(candidate_weights, event_idx, len(candidate_weights)* [tock])
 
         # import ipdb; ipdb.set_trace()
         return results_list
@@ -335,10 +339,12 @@ class PBOneExplainerTG(BaseExplainerTG):
             print(f'\nexplain {i}-th: {event_idx}')
             self._initialize(event_idx)
 
+            tick = time()
             candidate_weights = self.explain(event_idx=event_idx)
+            tock = time() - tick
             results_list.append( [ list(candidate_weights.keys()), list(candidate_weights.values()) ] )
             # import ipdb; ipdb.set_trace()
-            self._save_candidate_scores(candidate_weights, event_idx)
+            self._save_candidate_scores(candidate_weights, event_idx, len(candidate_weights)* [tock])
         
         return results_list
         
