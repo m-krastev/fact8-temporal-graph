@@ -8,7 +8,7 @@ source .venv/bin/activate
 pip install .
 ```
 
-Note: sometimes, you may be getting import errors. Those can be patched by exporting the PYTHONPATH variable to the root of the project.
+Note: sometimes, you may be getting import errors. Those can be patched by exporting the PYTHONPATH variable to the root of the project. 
 
 ```Bash
 export ROOT="/Users/matey/project/fact8" # change with your root folder
@@ -23,15 +23,6 @@ export PYTHONPATH=$ROOT:.:$PYTHONPATH
 curl http://snap.stanford.edu/jodie/reddit.csv > $ROOT/tgnnexplainer/xgraph/dataset/data/reddit.csv
 
 curl http://snap.stanford.edu/jodie/wikipedia.csv > $ROOT/tgnnexplainer/xgraph/dataset/data/wikipedia.csv
-```
-
-## Preprocess real-world datasets
-
-```Bash
-cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
-python process.py -d wikipedia
-python process.py -d reddit
-
 ```
 
 ## Generate simulated dataset
@@ -50,6 +41,23 @@ cd  $ROOT/tgnnexplainer/xgraph/dataset
 python generate_simulate_dataset.py -d simulate_v1(simulate_v2)
 ```
 
+## Preprocess real-world datasets
+
+Can be done manually:
+```Bash
+cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
+python process.py -d wikipedia
+python process.py -d reddit
+
+cd $ROOT/tgnnexplainer/xgraph/dataset
+python tg_dataset.py -d wikipedia(reddit, simulate_v1, simulate_v2) -c index
+```
+or using the provided script:
+```
+./scripts/download_and_process.sh
+```
+
+
 ## Generate indices to-be-explained
 
 This will generate the indices of the edges to be explained for each dataset.
@@ -64,17 +72,13 @@ python tg_dataset.py -d wikipedia(reddit, simulate_v1, simulate_v2) -c index
 ### tgat
 
 ```Bash
-cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
-./train.sh
-./cpckpt.sh
+./scripts/train_tgat.sh
 ```
 
 ### tgn
 
 ```Bash
-cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgn
-./train.sh
-./cpckpt.sh
+./scripts/train_tgn.sh
 ```
 
 ## Run our explainer and other  baselines

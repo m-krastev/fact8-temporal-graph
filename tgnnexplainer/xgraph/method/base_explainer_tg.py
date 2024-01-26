@@ -153,7 +153,7 @@ class BaseExplainerTG(object):
         score_filename = savepath / f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores.csv'
         return score_filename
 
-    def _save_candidate_scores(self, candidate_weights, event_idx):
+    def _save_candidate_scores(self, candidate_weights, event_idx, runtimes):
         """
         only for baseline explainer, save their computed candidate scores.
         """
@@ -161,7 +161,8 @@ class BaseExplainerTG(object):
         filename = self._score_path(self.results_dir, self.model_name, self.dataset_name, self.explainer_name, event_idx)
         data_dict = {
             'candidates': [],
-            'scores': []
+            'scores': [],
+            "runtime": runtimes
         }
         for k, v in candidate_weights.items():
             data_dict['candidates'].append(k)
