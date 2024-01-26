@@ -139,7 +139,6 @@ class BaseExplainerTG(object):
         self._set_candidate_events(event_idx)
         self._set_tgnn_wraper(event_idx)
         # self.candidate_initial_weights = None
-        np.random.seed(1)
         self.candidate_initial_weights = { e_idx: np.random.random() for e_idx in self.candidate_events }
 
         

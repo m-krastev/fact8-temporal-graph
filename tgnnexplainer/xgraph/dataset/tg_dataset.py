@@ -82,7 +82,6 @@ def generate_explain_index(file, explainer_idx_dir, dataset_name, explain_idx_na
         explain_idxs = np.random.choice(df[indices].e_idx.values, size=size, replace=False)
         # import ipdb; ipdb.set_trace()
     elif dataset_name in ['wikipedia', 'reddit']:
-        np.random.seed(1024)
         e_num = len(df)
         start_ratio = 0.7
         end_ratio = 0.99
@@ -109,7 +108,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-d', type=str, default='wikipedia')
     parser.add_argument('-c', type=str, choices=['format', 'index'])
+    parser.add_argument("--seed", type=int, default=42, help="random seed to use with the explainer indices")
     args = parser.parse_args()
+    
+    np.random.seed(args.seed) # was 1024
 
     data_dir = ROOT_DIR/'xgraph'/'models'/'ext'/'tgat'/'processed'
     explainer_idx_dir = ROOT_DIR/'xgraph'/'dataset'/'explain_index'

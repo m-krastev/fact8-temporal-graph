@@ -36,12 +36,23 @@ python process.py -d reddit
 
 ## Generate simulated dataset
 
+The simulated datasets can be downloaded as:
+
+```Bash
+curl https://m-krastev.github.io/hawkes-sim-datasets/simulate_v1 > $ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v1.csv
+curl https://m-krastev.github.io/hawkes-sim-datasets/simulate_v2 > $ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v2.csv
+```
+
+... or generated (note: this requires the [tick](https://https://github.com/X-DataInitiative/tick/issues) library):
+
 ```Bash
 cd  $ROOT/tgnnexplainer/xgraph/dataset
 python generate_simulate_dataset.py -d simulate_v1(simulate_v2)
 ```
 
-## Generate explain indexs
+## Generate indices to-be-explained
+
+This will generate the indices of the edges to be explained for each dataset.
 
 ```Bash
 cd $ROOT/tgnnexplainer/xgraph/dataset
