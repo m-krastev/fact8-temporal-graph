@@ -8,7 +8,7 @@ source .venv/bin/activate
 pip install .
 ```
 
-Note: sometimes, you may be getting import errors. Those can be patched by exporting the PYTHONPATH variable to the root of the project.
+Note: sometimes, you may be getting import errors. Those can be patched by exporting the PYTHONPATH variable to the root of the project. 
 
 ```Bash
 export ROOT="/Users/matey/project/fact8" # change with your root folder
@@ -31,7 +31,6 @@ curl http://snap.stanford.edu/jodie/wikipedia.csv > $ROOT/tgnnexplainer/xgraph/d
 cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
 python process.py -d wikipedia
 python process.py -d reddit
-
 ```
 
 ## Generate simulated dataset
@@ -64,17 +63,13 @@ python tg_dataset.py -d wikipedia(reddit, simulate_v1, simulate_v2) -c index
 ### tgat
 
 ```Bash
-cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
-./train.sh
-./cpckpt.sh
+./scripts/train_tgat.sh
 ```
 
 ### tgn
 
 ```Bash
-cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgn
-./train.sh
-./cpckpt.sh
+./scripts/train_tgn.sh
 ```
 
 ## Run our explainer and other  baselines
