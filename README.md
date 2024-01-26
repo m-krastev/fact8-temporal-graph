@@ -25,14 +25,6 @@ curl http://snap.stanford.edu/jodie/reddit.csv > $ROOT/tgnnexplainer/xgraph/data
 curl http://snap.stanford.edu/jodie/wikipedia.csv > $ROOT/tgnnexplainer/xgraph/dataset/data/wikipedia.csv
 ```
 
-## Preprocess real-world datasets
-
-```Bash
-cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
-python process.py -d wikipedia
-python process.py -d reddit
-```
-
 ## Generate simulated dataset
 
 The simulated datasets can be downloaded as:
@@ -48,6 +40,23 @@ curl https://m-krastev.github.io/hawkes-sim-datasets/simulate_v2 > $ROOT/tgnnexp
 cd  $ROOT/tgnnexplainer/xgraph/dataset
 python generate_simulate_dataset.py -d simulate_v1(simulate_v2)
 ```
+
+## Preprocess real-world datasets
+
+Can be done manually:
+```Bash
+cd  $ROOT/tgnnexplainer/xgraph/models/ext/tgat
+python process.py -d wikipedia
+python process.py -d reddit
+
+cd $ROOT/tgnnexplainer/xgraph/dataset
+python tg_dataset.py -d wikipedia(reddit, simulate_v1, simulate_v2) -c index
+```
+or using the provided script:
+```
+./scripts/download_and_process.sh
+```
+
 
 ## Generate indices to-be-explained
 
