@@ -98,8 +98,6 @@ do
 done
 
 
-# ls -l $ROOT/tgnnexplainer/xgraph/models/checkpoints
-
 ################################ TGAT ################################
 
 

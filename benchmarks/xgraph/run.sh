@@ -1,9 +1,12 @@
+#!/usr/bin/env zsh
 # run all explainers
 
 # datasets=(simulate_v1 simulate_v2 wikipedia reddit)
 datasets=(simulate_v1)
 # models=(tgat tgn)
-models=(tgat)
+models=(tgn)
+
+# alias python=/Users/Matey/project/fact8/.venv/bin/python3
 
 for dataset in ${datasets}
 do
