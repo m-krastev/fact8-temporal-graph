@@ -1,3 +1,4 @@
+from time import time
 import numpy as np
 from typing import Union
 from pandas import DataFrame
@@ -78,11 +79,13 @@ class AttnExplainerTG(BaseExplainerTG):
         for i, event_idx in enumerate(event_idxs):
             print(f'\nexplain {i}-th: {event_idx}')
             self._initialize(event_idx)
-
+            tick = time()
+            
             candidate_weights = self.explain(event_idx=event_idx)
             
-            results_list.append( [ list(candidate_weights.keys()), list(candidate_weights.values()) ] )
-            self._save_candidate_scores(candidate_weights, event_idx)
+            tock = time() - tick
+            results_list.append( [ list(candidate_weights.keys()), list(candidate_weights.values())] )
+            self._save_candidate_scores(candidate_weights, event_idx, len(candidate_weights)* [tock])
         
         return results_list
         
