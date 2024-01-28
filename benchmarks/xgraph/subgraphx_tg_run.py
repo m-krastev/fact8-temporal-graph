@@ -71,7 +71,7 @@ def start_multi_process(explainer, target_event_idxs, parallel_degree):
 def pipeline(config: DictConfig):
     # SEED
     seed_everything(config.seed)
-    
+
     # model config
     config.models.param = config.models.param[config.datasets.dataset_name]
     config.models.ckpt_path = str(
@@ -176,7 +176,7 @@ def pipeline(config: DictConfig):
         from tgnnexplainer.xgraph.method.subgraphx_tg import SubgraphXTG
         from tgnnexplainer.xgraph.method.navigators import MLPNavigator, DotProductNavigator
 
-        if config.explainer.navigator_type == 'mlp':
+        if config.explainers.navigator_type == 'mlp':
             navigator = MLPNavigator(
                 model,
                 config.models.model_name,
@@ -193,7 +193,7 @@ def pipeline(config: DictConfig):
                 batch_size=config.explainers.param.batch_size,
                 lr=config.explainers.param.lr
             )
-        elif config.explainer.navigator_type == 'dot':
+        elif config.explainers.navigator_type == 'dot':
             navigator = DotProductNavigator(
                 model=model,
                 model_name=config.models.model_name,
@@ -224,7 +224,7 @@ def pipeline(config: DictConfig):
                 navigator=navigator
                 if config.explainers.use_navigator
                 else None,
-                navigator_type=config.explainer.navigator_type,
+                navigator_type=config.explainers.navigator_type,
                 pg_positive=config.explainers.pg_positive,
             )
             for i in range(config.explainers.parallel_degree)
