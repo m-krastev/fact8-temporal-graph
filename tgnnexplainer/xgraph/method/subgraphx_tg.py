@@ -382,7 +382,7 @@ class SubgraphXTG(BaseExplainerTG):
                 rollout: int = 20, min_atoms: int = 1, c_puct: float = 10.0,
                 # expand_atoms=14,
                 load_results=False, mcts_saved_dir: Optional[str] = None, save_results: bool= True,
-                navigator=None, pg_positive=True,
+                navigator=None, navigator_type='mlp', pg_positive=True
                 ):
 
         super(SubgraphXTG, self).__init__(model=model, 
@@ -409,8 +409,9 @@ class SubgraphXTG(BaseExplainerTG):
         # self.mcts_saved_filename = mcts_saved_filename
         self.save = save_results
         self.navigator = navigator # to assign initial weights using a trained pg_explainer_tg
+        self.navigator_type = navigator_type
         self.pg_positive = pg_positive
-        self.suffix = self._path_suffix(navigator, pg_positive)
+        self.suffix = self._path_suffix(navigator, navigator_type, pg_positive)
 
     @staticmethod
     def read_from_MCTSInfo_list(MCTSInfo_list):
@@ -470,20 +471,23 @@ class SubgraphXTG(BaseExplainerTG):
         return tree_nodes, tree_node_x
     
     @staticmethod
-    def _path_suffix(navigator, pg_positive):
+    def _path_suffix(navigator, navigator_type, pg_positive):
         if navigator is not None:
-            suffix = 'pg_true'
+            if navigator_type == 'mlp': # not the nicest solution, but trying to keep it compatible
+                suffix = 'pg_true'
+            else:
+                suffix = 'dot_true'
         else:
             suffix = 'pg_false'
         
         if navigator is not None:
+            # FIXME: this is just ugly at this point, but don't want to break file naming convention if the MLP navigator is used.
             if pg_positive is True:
-                suffix += '_pg_positive'
+                suffix += '_pg_positive' 
             else:
                 suffix += '_pg_negative'
-        
+
         return suffix
-        
 
     @staticmethod
     def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix):
