@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from tgnnexplainer.xgraph.method.base_explainer_tg import BaseExplainerTG
 from tgnnexplainer.xgraph.method.other_baselines_tg import PGExplainerExt
@@ -99,30 +100,31 @@ class DotProductNavigator():
             Note: the input consists of pair-wise concatenation 
                 of the target event and the candidate events.
         """
-        # split the input into source, destionations and cut time (time stamp of target)
-        src, dst, cut_time = _set_tgat_data(self.all_events, target_idx)
-        # the length of all of the above should be equal to the id of the target event
-        assert len(src) == target_idx and len(dst) == target_idx and len(cut_time) == target_idx
-        # obtain output embeddings of the target model
-        if self.model_name == 'tgn':
-            src_embed, dst_embed, _ = self.model.compute_temporal_embeddings(
-                source_nodes=src,
-                destination_nodes=dst,
-                negative_nodes=np.array([0]), # like in TGN.get_prob
-                edge_times=cut_time,
-                edge_idxs=None, # this is fine (accoring to comments made in TGN.get_prob)
-                n_neighbors=self.model.num_neighbors,
-                edge_idx_preserve_list=None, # this would mask out edges when looking for the neighbourhood
-                candidate_weights_dict=None  # this is what we are trying to compute here
-            )
-        elif self.model_name == 'tgat':
-            src_embed = self.model.tem_conv(src, cut_time, self.model.num_layers)
-            dst_embed = self.model.tem_conv(dst, cut_time, self.model.num_layers)
-        # concatenate source and destination embeddings for each event
-        embed = np.concatenate((src_embed, dst_embed), axis=1)
-        # compute dot product between the target event and the candidate events
-        dot_product = np.dot(embed, embed[target_idx])
-        # we can also normalize the dot product, but it may not matter much since these scores are just used for sorting the candidates
+        with torch.no_grad():
+            # split the input into source, destionations and cut time (time stamp of target)
+            src, dst, cut_time = _set_tgat_data(self.all_events, [*candidate_event_idx, target_idx])
+            # the length of all of the above should be equal to the id of the target event
+            # assert src[0].shape[0] == target_idx and dst[0].shape[0] == target_idx and cut_time[0].shape[0] == target_idx
+            # obtain output embeddings of the target model
+            if self.model_name == 'tgn':
+                src_embed, dst_embed, _ = self.model.compute_temporal_embeddings(
+                    source_nodes=src,
+                    destination_nodes=dst,
+                    negative_nodes=np.array([0]*src.shape[0]), # like in TGN.get_prob
+                    edge_times=cut_time,
+                    edge_idxs=None, # this is fine (accoring to comments made in TGN.get_prob)
+                    n_neighbors=self.model.num_neighbors,
+                    edge_idx_preserve_list=None, # this would mask out edges when looking for the neighbourhood
+                    candidate_weights_dict=None  # this is what we are trying to compute here
+                )
+            elif self.model_name == 'tgat':
+                src_embed = self.model.tem_conv(src, cut_time, self.model.num_layers)
+                dst_embed = self.model.tem_conv(dst, cut_time, self.model.num_layers)
+            # concatenate source and destination embeddings for each event
+            embed = np.concatenate((src_embed, dst_embed), axis=1)
+            # compute dot product between the target event and the candidate events
+            dot_product = np.dot(embed[:-1], embed[-1])
+            # we can also normalize the dot product, but it may not matter much since these scores are just used for sorting the candidates
 
-        # return the scores for all inputs. The selection of candidates is done elsewhere.
-        return dot_product
+            # return the scores for all inputs. The selection of candidates is done elsewhere.
+            return dot_product
