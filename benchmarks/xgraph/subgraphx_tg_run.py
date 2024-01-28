@@ -174,24 +174,34 @@ def pipeline(config: DictConfig):
         config.explainers.explainer_name == "subgraphx_tg"
     ):  # DONE: test this 'use_pg_explainer'
         from tgnnexplainer.xgraph.method.subgraphx_tg import SubgraphXTG
-        from tgnnexplainer.xgraph.method.navigators import MLPNavigator
+        from tgnnexplainer.xgraph.method.navigators import MLPNavigator, DotProductNavigator
 
-        navigator = MLPNavigator(
-            model,
-            config.models.model_name,
-            config.explainers.explainer_name,
-            config.datasets.dataset_name,
-            events,
-            config.explainers.param.explanation_level,
-            device=device,
-            results_dir=config.explainers.results_dir,
-            debug_mode=config.explainers.debug_mode,
-            train_epochs=config.explainers.param.train_epochs,
-            explainer_ckpt_dir=config.explainers.explainer_ckpt_dir,
-            reg_coefs=config.explainers.param.reg_coefs,
-            batch_size=config.explainers.param.batch_size,
-            lr=config.explainers.param.lr
-        )
+        if config.explainer.navigator_type == 'mlp':
+            navigator = MLPNavigator(
+                model,
+                config.models.model_name,
+                config.explainers.explainer_name,
+                config.datasets.dataset_name,
+                events,
+                config.explainers.param.explanation_level,
+                device=device,
+                results_dir=config.explainers.results_dir,
+                debug_mode=config.explainers.debug_mode,
+                train_epochs=config.explainers.param.train_epochs,
+                explainer_ckpt_dir=config.explainers.explainer_ckpt_dir,
+                reg_coefs=config.explainers.param.reg_coefs,
+                batch_size=config.explainers.param.batch_size,
+                lr=config.explainers.param.lr
+            )
+        elif config.explainer.navigator_type == 'dot':
+            navigator = DotProductNavigator(
+                model=model,
+                model_name=config.models.model_name,
+                device=device,
+                all_events=events
+            )
+        else:
+            raise NotImplementedError
 
         assert config.explainers.parallel_degree >= 1
         explainer = [
@@ -214,6 +224,7 @@ def pipeline(config: DictConfig):
                 navigator=navigator
                 if config.explainers.use_navigator
                 else None,
+                navigator_type=config.explainer.navigator_type,
                 pg_positive=config.explainers.pg_positive,
             )
             for i in range(config.explainers.parallel_degree)

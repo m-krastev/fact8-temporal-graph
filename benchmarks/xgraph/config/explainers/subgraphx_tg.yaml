@@ -8,6 +8,7 @@ explainer_name: 'subgraphx_tg'
 debug_mode: False
 explainer_ckpt_dir: ''
 use_navigator: True
+navigator_type: 'dot' # mlp, dot
 pg_positive: True
 
 
