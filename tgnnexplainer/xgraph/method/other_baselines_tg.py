@@ -27,9 +27,9 @@ def _create_explainer_input(model: Union[TGAN, TGN], model_name, all_events, can
         # import ipdb; ipdb.set_trace()
         t_idx_t_emb = model.time_encoder( torch.tensor(event_idx_t, dtype=torch.float32, device=device).reshape((1, -1)) ).reshape((1, -1))
         t_idx_e_emb = model.edge_raw_embed[ torch.tensor([event_idx_new, ], dtype=torch.int64, device=device), : ]
-        
+
         target_event_emb = torch.cat([t_idx_u_emb,t_idx_i_emb, t_idx_t_emb, t_idx_e_emb ], dim=1)
-        
+
         candidate_events_u, candidate_events_i, candidate_events_t = _set_tgat_data(all_events, candidate_events)
         candidate_events_new = candidate_events
 
@@ -49,8 +49,8 @@ def _create_explainer_input(model: Union[TGAN, TGN], model_name, all_events, can
 
 
 class PGExplainerExt(BaseExplainerTG):
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True,
+    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str,
+                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True , threshold_num=20,
                  # specific params for PGExplainerExt
                  train_epochs: int = 50, explainer_ckpt_dir = None, reg_coefs = None, batch_size = 64, lr=1e-4
                 ):
@@ -63,7 +63,8 @@ class PGExplainerExt(BaseExplainerTG):
                                               device=device,
                                               verbose=verbose,
                                               results_dir=results_dir,
-                                              debug_mode=debug_mode
+                                              debug_mode=debug_mode,
+                                              threshold_num=threshold_num
                                               )
         self.train_epochs = train_epochs
         self.explainer_ckpt_dir = explainer_ckpt_dir
@@ -71,19 +72,8 @@ class PGExplainerExt(BaseExplainerTG):
         self.batch_size = batch_size
         self.lr = lr
         self.expl_input_dim = None
+        self.threshold_num = threshold_num
         self._init_explainer()
-        
-        self.explainer_ckpt_path = self._ckpt_path(self.explainer_ckpt_dir, self.model_name, self.dataset_name, self.explainer_name)
-        # if exists, load. Otherwise train.
-        if self.explainer_ckpt_path.exists():
-            state_dict = torch.load(self.explainer_ckpt_path)
-            self.explainer_model.load_state_dict(state_dict)
-            print(f'explainer ckpt loaded from {str(self.explainer_ckpt_path)}')
-        else:
-            print(f'explainer ckpt not found at {str(self.explainer_ckpt_path)}')
-            print('start training...')
-            self._train()
-            print('training finished')
 
     @staticmethod
     def _create_explainer(model, model_name, device):
@@ -109,11 +99,19 @@ class PGExplainerExt(BaseExplainerTG):
             return Path(ckpt_dir)/f'{model_name}_{dataset_name}_{explainer_name}_expl_ckpt.pt'
         else:
             return Path(ckpt_dir)/f'{model_name}_{dataset_name}_{explainer_name}_expl_ckpt_ep{epoch}.pt'
-    
+
     def _init_explainer(self):
         self.explainer_model = self._create_explainer(self.model, self.model_name, self.device)
 
     def __call__(self, node_idxs: Union[int, None] = None, event_idxs: Union[int, None] = None):
+        self.explainer_ckpt_path = self._ckpt_path(self.explainer_ckpt_dir, self.model_name, self.dataset_name, self.explainer_name)
+        self.explain_event_idxs = event_idxs
+
+        if not self.explainer_ckpt_path.exists():
+            self._train() # we need to train the explainer first
+        else:
+            state_dict = torch.load(self.explainer_ckpt_path)
+            self.explainer_model.load_state_dict(state_dict)
 
         results_list = []
         for i, event_idx in enumerate(event_idxs):
@@ -127,7 +125,7 @@ class PGExplainerExt(BaseExplainerTG):
         # import ipdb; ipdb.set_trace()
         return results_list
 
-    
+
     def _tg_predict(self, event_idx, use_explainer=False):
         if self.model_name in ['tgat', 'tgn']:
             src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(self.all_events, event_idx)
@@ -147,7 +145,7 @@ class PGExplainerExt(BaseExplainerTG):
             output = self.model.get_prob( src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
             return output, edge_weights
 
-        else: 
+        else:
             raise NotImplementedError
 
     def _loss(self, masked_pred, original_pred, mask, reg_coefs):
@@ -165,8 +163,8 @@ class PGExplainerExt(BaseExplainerTG):
             error_loss = masked_pred - original_pred
         else:
             error_loss = original_pred - masked_pred
-        error_loss = error_loss * -1 # to minimize 
-        
+        error_loss = error_loss * -1 # to minimize
+
         # cce_loss = torch.nn.functional.mse_loss(masked_pred, original_pred)
 
         #return cce_loss
@@ -175,7 +173,7 @@ class PGExplainerExt(BaseExplainerTG):
         # import ipdb; ipdb.set_trace()
 
         return error_loss
-    
+
     def _obtain_train_idxs(self,):
         size = 1000
         # np.random.seed( np.random.randint(10000) )
@@ -183,7 +181,7 @@ class PGExplainerExt(BaseExplainerTG):
             train_e_idxs = np.random.randint(int(len(self.all_events)*0.2), int(len(self.all_events)*0.6), (size, ))
             train_e_idxs = shuffle(train_e_idxs) # TODO: not shuffle?
         elif self.dataset_name in ['simulate_v1', 'simulate_v2']:
-            positive_indices = self.all_events.label == 1 
+            positive_indices = self.all_events.label == 1
             pos_events = self.all_events[positive_indices].e_idx.values
             train_e_idxs = np.random.choice(pos_events, size=size, replace=False)
 
@@ -196,8 +194,8 @@ class PGExplainerExt(BaseExplainerTG):
         optimizer = torch.optim.Adam(self.explainer_model.parameters(), lr=self.lr)
 
         # train_e_idxs = np.random.randint(int(len(self.all_events)*0.2), int(len(self.all_events)*0.6), (2000, )) # NOTE: set train event idxs
-        
-        
+
+
         for e in range(self.train_epochs):
             train_e_idxs = self._obtain_train_idxs()
 
@@ -213,13 +211,9 @@ class PGExplainerExt(BaseExplainerTG):
                     skipped_num += 1
                     continue
 
-                # get the outputs of the target model for the given events
                 original_pred, mask_values_ = self._tg_predict(event_idx, use_explainer=False)
-                # get the soft-masked outputs of the target model
-                # soft-masks are computed by the explainer model (which is called navigator in the paper)
                 masked_pred, mask_values = self._tg_predict(event_idx, use_explainer=True)
 
-                # binary cross entropy between the original and masked outputs
                 id_loss = self._loss(masked_pred, original_pred, mask_values, self.reg_coefs)
                 # import ipdb; ipdb.set_trace()
                 id_loss = id_loss.flatten()
@@ -235,12 +229,12 @@ class PGExplainerExt(BaseExplainerTG):
                     optimizer.step()
                     loss = torch.tensor([0], dtype=torch.float32, device=self.device)
                     optimizer.zero_grad()
-        
+
             # import ipdb; ipdb.set_trace()
             state_dict = self.explainer_model.state_dict()
-
-            torch.save(state_dict, self.explainer_ckpt_path)
-            tqdm.write(f"epoch {e} loss epoch {np.mean(loss_list)}, skipped: {skipped_num}, ckpt saved: {self.explainer_ckpt_path}")
+            ckpt_save_path = self._ckpt_path(self.explainer_ckpt_dir, self.model_name, self.dataset_name, self.explainer_name, epoch=e)
+            torch.save(state_dict, ckpt_save_path)
+            tqdm.write(f"epoch {e} loss epoch {np.mean(loss_list)}, skipped: {skipped_num}, ckpt saved: {ckpt_save_path}")
 
         state_dict = self.explainer_model.state_dict()
         torch.save(state_dict, self.explainer_ckpt_path)
@@ -258,17 +252,30 @@ class PGExplainerExt(BaseExplainerTG):
         candidate_weights = { self.candidate_events[i]: event_idx_scores[i] for i in range(len(self.candidate_events)) }
         candidate_weights = dict( sorted(candidate_weights.items(), key=lambda x: x[1], reverse=True) ) # NOTE: descending, important
 
+        threshold = self.threshold_num
+        if len(candidate_weights) > threshold:
+            candidate_weights = candidate_events[-threshold:]
+            candidate_weights = sorted(candidate_weights)
+
         return candidate_weights
 
-    def expose_explainer_model(self):
-        return self.explainer_model # torch.nn.Sequential
+    @staticmethod
+    def expose_explainer_model(model, model_name, explainer_name, dataset_name, ckpt_dir, device):
+        explainer_model = PGExplainerExt._create_explainer(model, model_name, device)
+        explainer_ckpt_path = PGExplainerExt._ckpt_path(ckpt_dir, model_name, dataset_name, explainer_name)
+
+        state_dict = torch.load(explainer_ckpt_path)
+        explainer_model.load_state_dict(state_dict)
+
+        return explainer_model, explainer_ckpt_path
+
 
 class PBOneExplainerTG(BaseExplainerTG):
     """
     perturb only one event to evaluate its influence, then leverage the rank info.
     """
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True,
+    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str,
+                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True , threshold_num=20,
                 ):
         super(PBOneExplainerTG, self).__init__(model=model,
                                               model_name=model_name,
@@ -280,9 +287,10 @@ class PBOneExplainerTG(BaseExplainerTG):
                                               verbose=verbose,
                                               results_dir=results_dir,
                                               debug_mode=debug_mode,
+                                              threshold_num=threshold_num
                                               )
         # assert model_name in ['tgat', 'tgn']
-        
+
 
     def _agg_attention(self, atten_weights_list):
         e_idx_weight_dict = {}
@@ -314,7 +322,7 @@ class PBOneExplainerTG(BaseExplainerTG):
             total = base_events + preserved
             score = self.tgnn_reward_wraper._compute_gnn_score(total, event_idx)
             e_idx_logit_dict[e_idx] = score
-        
+
         # import ipdb; ipdb.set_trace()
         # compute an importance score for ranking them
         e_idx_score_dict = {}
@@ -322,11 +330,16 @@ class PBOneExplainerTG(BaseExplainerTG):
         for e_idx in e_idx_logit_dict.keys():
             # e_idx_score_dict[e_idx] = fidelity_inv_tg(ori_score, e_idx_logit_dict[e_idx]) # the larger the fidelity, the larger the unimportance.
             e_idx_score_dict[e_idx] = fidelity_inv_tg(ori_score, e_idx_logit_dict[e_idx]) * -1 # the larger the score, the larger the importance
-        
+
         # the same as Attn explainer
         candidate_weights = { e_idx: e_idx_score_dict[e_idx] for e_idx in self.candidate_events }
         candidate_weights = dict( sorted(candidate_weights.items(), key=lambda x: x[1], reverse=True) ) # NOTE: descending, important
-        
+
+        threshold = self.threshold_num
+        if len(candidate_weights) > threshold:
+            candidate_weights = candidate_events[-threshold:]
+            candidate_weights = sorted(candidate_weights)
+
         return candidate_weights
 
     def __call__(self, node_idxs: Union[int, None] = None, event_idxs: Union[int, None] = None):
@@ -339,6 +352,5 @@ class PBOneExplainerTG(BaseExplainerTG):
             results_list.append( [ list(candidate_weights.keys()), list(candidate_weights.values()) ] )
             # import ipdb; ipdb.set_trace()
             self._save_candidate_scores(candidate_weights, event_idx)
-        
+
         return results_list
-        
