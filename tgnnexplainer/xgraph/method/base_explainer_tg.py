@@ -10,8 +10,18 @@ from tgnnexplainer.xgraph.method.tg_score import TGNNRewardWraper
 from tgnnexplainer.xgraph.dataset.utils_dataset import k_hop_temporal_subgraph
 
 class BaseExplainerTG(object):
-    def __init__(self, model: Union[TGAN, None], model_name: str, explainer_name: str, dataset_name: str, all_events: str, explanation_level: str, device, 
-                verbose: bool = True, results_dir: Optional[str] = None, debug_mode: bool=True) -> None:
+    def __init__(self,
+                 model: Union[TGAN, None],
+                 model_name: str,
+                 explainer_name: str,
+                 dataset_name: str,
+                 all_events: str,
+                 explanation_level: str,
+                 device,
+                 verbose: bool = True,
+                 results_dir: Optional[str] = None,
+                 debug_mode: bool=True,
+                 threshold_num: int=25) -> None:
         """
         results_dir: dir for saving value results, e.g., fidelity_sparsity. Not mcts_node_list
         """
@@ -22,7 +32,7 @@ class BaseExplainerTG(object):
         self.all_events = all_events
         self.num_users = all_events.iloc[:, 0].max() + 1
         self.explanation_level = explanation_level
-        
+        self.threshold_num = threshold_num
         self.device = device
         self.verbose = verbose
         self.results_dir = Path(results_dir)
@@ -97,11 +107,10 @@ class BaseExplainerTG(object):
             
         else:
             raise NotImplementedError
-        
+
         candidate_events = unique_e_idx
-        threshold_num = 20
-        if len(candidate_events) > threshold_num:
-            candidate_events = candidate_events[-threshold_num:]
+        if len(candidate_events) > self.threshold_num:
+            candidate_events = candidate_events[-self.threshold_num:]
             candidate_events = sorted(candidate_events)
         # import ipdb; ipdb.set_trace()
         

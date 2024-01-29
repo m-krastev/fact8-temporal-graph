@@ -7,9 +7,18 @@ from tgnnexplainer.xgraph.method.base_explainer_tg import BaseExplainerTG
 
 
 class AttnExplainerTG(BaseExplainerTG):
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True,
-                ):
+    def __init__(self,
+                 model,
+                 model_name: str,
+                 explainer_name: str,
+                 dataset_name: str,
+                 all_events: DataFrame,
+                 explanation_level: str,
+                 device,
+                 verbose: bool = True,
+                 results_dir = None,
+                 debug_mode=True,
+                 threshold_num=25):
         super(AttnExplainerTG, self).__init__(model=model,
                                               model_name=model_name,
                                               explainer_name=explainer_name,
@@ -20,9 +29,9 @@ class AttnExplainerTG(BaseExplainerTG):
                                               verbose=verbose,
                                               results_dir=results_dir,
                                               debug_mode=debug_mode,
-                                              )
+                                              threshold_num=threshold_num)
         # assert model_name in ['tgat', 'tgn']
-        
+
     @staticmethod
     def _agg_attention(model, model_name):
         # after a forward computation in the model
