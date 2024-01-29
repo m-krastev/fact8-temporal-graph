@@ -521,21 +521,21 @@ class SubgraphXTG(BaseExplainerTG):
         return suffix
 
     @staticmethod
-    def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix):
+    def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix, th_num):
         result_dir = result_dir / "candidate_scores"
         if suffix is not None:
-            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{suffix}.csv'
+            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{suffix}_{th_num}.csv'
         else:
-            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder.csv'
+            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{th_num}.csv'
         
         return record_filename
     
     @staticmethod
-    def _mcts_node_info_path(node_info_dir, model_name, dataset_name, event_idx, suffix):
+    def _mcts_node_info_path(node_info_dir, model_name, dataset_name, event_idx, suffix, th_num):
         if suffix is not None:
-            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{suffix}.pt"
+            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{suffix}_{th_num}.pt"
         else:
-            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info.pt"
+            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{th_num}.pt"
 
         return nodeinfo_filename
 
@@ -543,7 +543,7 @@ class SubgraphXTG(BaseExplainerTG):
         # save records
         recorder_df = pd.DataFrame(self.mcts_state_map.recorder)
         # ROOT_DIR.parent/'benchmarks'/'results'
-        record_filename = self._mcts_recorder_path(self.results_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
+        record_filename = self._mcts_recorder_path(self.results_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix, th_num=self.threshold_num)
         record_filename.parent.mkdir(parents=True, exist_ok=True)
         recorder_df.to_csv(record_filename, index=False)
 
@@ -553,12 +553,12 @@ class SubgraphXTG(BaseExplainerTG):
         saved_contents = {
             'saved_MCTSInfo_list': self.write_from_MCTSNode_list(tree_nodes),
         }
-        path = self._mcts_node_info_path(self.mcts_saved_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
+        path = self._mcts_node_info_path(self.mcts_saved_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix, th_num=self.threshold_num)
         torch.save(saved_contents, path)
         print(f'results saved at {path}')
     
     def _load_saved_nodes_info(self, event_idx):
-        path = self._mcts_node_info_path(self.mcts_saved_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix)
+        path = self._mcts_node_info_path(self.mcts_saved_dir, self.model_name, self.dataset_name, event_idx, suffix=self.suffix, th_num=self.threshold_num)
         assert os.path.isfile(path)
         saved_contents = torch.load(path)
         

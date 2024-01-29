@@ -153,13 +153,13 @@ class BaseExplainerTG(object):
         
 
     @staticmethod
-    def _score_path(results_dir, model_name, dataset_name, explainer_name, event_idx,):
+    def _score_path(results_dir, model_name, dataset_name, explainer_name, event_idx, th_num):
         """
         only for baseline explainer, save their computed candidate scores.
         """
         savepath = results_dir / "candidate_scores"
         savepath.mkdir(parents=True, exist_ok=True)
-        score_filename = savepath / f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores.csv'
+        score_filename = savepath / f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores_{th_num}.csv'
         return score_filename
 
     def _save_candidate_scores(self, candidate_weights, event_idx, runtimes):
@@ -167,7 +167,7 @@ class BaseExplainerTG(object):
         only for baseline explainer, save their computed candidate scores.
         """
         assert isinstance(candidate_weights, dict)
-        filename = self._score_path(self.results_dir, self.model_name, self.dataset_name, self.explainer_name, event_idx)
+        filename = self._score_path(self.results_dir, self.model_name, self.dataset_name, self.explainer_name, event_idx, self.threshold_num)
         data_dict = {
             'candidates': [],
             'scores': [],
