@@ -1,0 +1,25 @@
+#!/bin/bash
+
+#SBATCH --partition=gpu
+#SBATCH --job-name=FACT8_setup
+#SBATCH --output=setup_%A.out
+#SBATCH --time=00:15:00
+#SBATCH --mem=1G
+#SBATCH --gres=gpu:1
+#SBATCH --gpus=1
+#SBATCH --cpus-per-task=4
+# 
+
+# Load modules
+module purge
+module load 2023
+module load Python/3.11.3-GCCcore-12.3.0
+
+# Activate your environment
+
+# Print current datetime for debug purposes
+date
+
+scripts/install_from_scratch.sh
+
+
