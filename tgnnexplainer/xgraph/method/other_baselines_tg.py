@@ -50,10 +50,24 @@ def _create_explainer_input(model: Union[TGAN, TGN], model_name, all_events, can
 
 
 class PGExplainerExt(BaseExplainerTG):
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True,
+    def __init__(self,
+                 model,
+                 model_name: str,
+                 explainer_name: str,
+                 dataset_name: str,
+                 all_events: DataFrame,
+                 explanation_level: str,
+                 device,
+                 verbose: bool = True,
+                 results_dir = None,
+                 debug_mode=True,
+                 threshold_num=25,
                  # specific params for PGExplainerExt
-                 train_epochs: int = 50, explainer_ckpt_dir = None, reg_coefs = None, batch_size = 64, lr=1e-4
+                 train_epochs: int = 50,
+                 explainer_ckpt_dir = None,
+                 reg_coefs = None,
+                 batch_size = 64,
+                 lr=1e-4
                 ):
         super(PGExplainerExt, self).__init__(model=model,
                                               model_name=model_name,
@@ -64,8 +78,8 @@ class PGExplainerExt(BaseExplainerTG):
                                               device=device,
                                               verbose=verbose,
                                               results_dir=results_dir,
-                                              debug_mode=debug_mode
-                                              )
+                                              debug_mode=debug_mode,
+                                              threshold_num=threshold_num)
         self.train_epochs = train_epochs
         self.explainer_ckpt_dir = explainer_ckpt_dir
         self.reg_coefs = reg_coefs
@@ -270,9 +284,18 @@ class PBOneExplainerTG(BaseExplainerTG):
     """
     perturb only one event to evaluate its influence, then leverage the rank info.
     """
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True,
-                ):
+    def __init__(self,
+                 model,
+                 model_name: str,
+                 explainer_name: str,
+                 dataset_name: str,
+                 all_events: DataFrame,
+                 explanation_level: str,
+                 device,
+                 verbose: bool = True,
+                 results_dir = None,
+                 debug_mode=True,
+                 threshold_num=25):
         super(PBOneExplainerTG, self).__init__(model=model,
                                               model_name=model_name,
                                               explainer_name=explainer_name,
@@ -283,9 +306,9 @@ class PBOneExplainerTG(BaseExplainerTG):
                                               verbose=verbose,
                                               results_dir=results_dir,
                                               debug_mode=debug_mode,
-                                              )
+                                              threshold_num=threshold_num)
         # assert model_name in ['tgat', 'tgn']
-        
+
 
     def _agg_attention(self, atten_weights_list):
         e_idx_weight_dict = {}

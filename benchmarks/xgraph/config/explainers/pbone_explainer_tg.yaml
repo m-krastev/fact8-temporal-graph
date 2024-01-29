@@ -11,15 +11,19 @@ explainer_ckpt_dir: ''
 param:
   wikipedia:
     explanation_level: 'event'
+    threshold_num: 25
     verbose: True
   reddit:
     explanation_level: 'event'
+    threshold_num: 25
     verbose: True
   simulate_v1:
     explanation_level: 'event'
+    threshold_num: 25
     verbose: True
   simulate_v2:
     explanation_level: 'event'
+    threshold_num: 25
     verbose: True
 
   

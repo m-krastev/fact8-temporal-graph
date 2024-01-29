@@ -376,13 +376,29 @@ class SubgraphXTG(BaseExplainerTG):
     MCTS based temporal graph GNN explainer
     """
 
-    def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, 
-                verbose: bool = True, results_dir = None, debug_mode: bool = True,
-                # specific params
-                rollout: int = 20, min_atoms: int = 1, c_puct: float = 10.0,
-                # expand_atoms=14,
-                load_results=False, mcts_saved_dir: Optional[str] = None, save_results: bool= True,
-                navigator=None, navigator_type='mlp', pg_positive=True
+    def __init__(self,
+                 model,
+                 model_name: str,
+                 explainer_name: str,
+                 dataset_name: str,
+                 all_events: DataFrame,
+                 explanation_level: str,
+                 device,
+                 verbose: bool = True,
+                 results_dir = None,
+                 debug_mode: bool = True,
+                 threshold_num: int = 25,
+                 # specific params
+                 rollout: int = 20,
+                 min_atoms: int = 1,
+                 c_puct: float = 10.0,
+                 # expand_atoms=14,
+                 load_results=False,
+                 mcts_saved_dir: Optional[str] = None,
+                 save_results: bool= True,
+                 navigator=None,
+                 navigator_type='mlp',
+                 pg_positive=True
                 ):
 
         super(SubgraphXTG, self).__init__(model=model, 
@@ -394,9 +410,10 @@ class SubgraphXTG(BaseExplainerTG):
                                           device=device,
                                           verbose=verbose,
                                           results_dir=results_dir,
-                                          debug_mode=debug_mode
+                                          debug_mode=debug_mode,
+                                          threshold_num=threshold_num
                                           )
-        
+
 
         # mcts hyper-parameters
         self.rollout = rollout
