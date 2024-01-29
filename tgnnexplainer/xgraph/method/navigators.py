@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from tgnnexplainer.xgraph.method.base_explainer_tg import BaseExplainerTG
+from tgnnexplainer.xgraph.method.attn_explainer_tg import AttnExplainerTG
 from tgnnexplainer.xgraph.method.other_baselines_tg import PGExplainerExt
 from tgnnexplainer.xgraph.method.other_baselines_tg import _create_explainer_input
 from tgnnexplainer.xgraph.method.tg_score import _set_tgat_data
@@ -72,6 +72,23 @@ class MLPNavigator():
 
         # compute importance scores
         edge_weights = self.mlp(input_expl)
+
+        # added to original model attention scores
+        candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
+                                  'edge_weights': edge_weights,
+                                  }
+        src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(
+            self.all_events, target_idx)
+        # run forward pass on the target model with soft-masks applied to the input events
+        output = self.model.get_prob(
+            src_idx_l, target_idx_l, cut_time_l, logit=True, candidate_weights_dict=candidate_weights_dict)
+        # obtain aggregated attention scores for the masked candidate input events
+        e_idx_weight_dict = AttnExplainerTG._agg_attention(
+            self.model, self.model_name)
+        # final edge weights are the aggregated attention scores masked by the pre-trained navigator
+        edge_weights = np.array([e_idx_weight_dict[e_idx]
+                                for e_idx in candidate_event_idx])
+        # added to original model attention scores
 
         return edge_weights
 
