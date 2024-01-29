@@ -244,6 +244,7 @@ def pipeline(config: DictConfig):
             device=device,
             results_dir=config.explainers.results_dir,
             debug_mode=config.explainers.debug_mode,
+            threshold_num=config.explainers.param.threshold_num,
         )
     elif config.explainers.explainer_name == 'attn_explainer_v2':
         # added later
