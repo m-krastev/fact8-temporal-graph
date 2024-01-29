@@ -18,6 +18,7 @@ param:
       - 0.1
     batch_size: 16
     lr: 1e-4
+    threshold_num: 25
   reddit:
     explanation_level: 'event'
     verbose: True
@@ -27,26 +28,24 @@ param:
       - 0.1
     batch_size: 16
     lr: 1e-4
+    threshold_num: 25
   simulate_v1:
     explanation_level: 'event'
     verbose: True
-    train_epochs: 20 # 20, 30, 
+    train_epochs: 20 # 20, 30,
     reg_coefs:
       - 0.5
       - 0.1
     batch_size: 16
     lr: 1e-4
+    threshold_num: 25
   simulate_v2:
     explanation_level: 'event'
     verbose: True
-    train_epochs: 20 # 20, 30, 
+    train_epochs: 20 # 20, 30,
     reg_coefs:
       - 0.5
       - 0.1
     batch_size: 16
     lr: 1e-4
-  
-  
-
-
-  
+    threshold_num: 25

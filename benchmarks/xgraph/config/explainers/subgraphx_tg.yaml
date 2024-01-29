@@ -20,8 +20,9 @@ param:
     verbose: True
     rollout: 500
     c_puct: 5
+    threshold_num: 25
     min_atoms: 100
-    
+
     train_epochs: 100 # 20
     reg_coefs:
       - 0.5
@@ -33,8 +34,9 @@ param:
     verbose: True
     rollout: 500
     c_puct: 5
+    threshold_num: 25
     min_atoms: 6
-    
+
     train_epochs: 30 # 20
     reg_coefs:
       - 0.5
@@ -46,6 +48,7 @@ param:
     verbose: True
     rollout: 500
     c_puct: 5
+    threshold_num: 25
     min_atoms: 20 # only influence use_pg_explainer's fidelity-rollout curve
     train_epochs: 20 # 20
     reg_coefs:
@@ -58,6 +61,7 @@ param:
     verbose: True
     rollout: 500
     c_puct: 5
+    threshold_num: 25
     min_atoms: 20
 
     train_epochs: 20 # 20
@@ -66,4 +70,3 @@ param:
       - 0.1
     batch_size: 16
     lr: 1e-4
-  

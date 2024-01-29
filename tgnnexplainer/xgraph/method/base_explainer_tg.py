@@ -11,7 +11,7 @@ from tgnnexplainer.xgraph.dataset.utils_dataset import k_hop_temporal_subgraph
 
 class BaseExplainerTG(object):
     def __init__(self, model: Union[TGAN, None], model_name: str, explainer_name: str, dataset_name: str, all_events: str, explanation_level: str, device, 
-                verbose: bool = True, results_dir: Optional[str] = None, debug_mode: bool=True) -> None:
+                verbose: bool = True, results_dir: Optional[str] = None, debug_mode: bool=True, threshold_num=20) -> None:
         """
         results_dir: dir for saving value results, e.g., fidelity_sparsity. Not mcts_node_list
         """
@@ -27,6 +27,7 @@ class BaseExplainerTG(object):
         self.verbose = verbose
         self.results_dir = Path(results_dir)
         self.debug_mode = debug_mode
+        self.threshold_num = threshold_num
         
         self.model.eval()
         self.model.to(self.device)
@@ -99,9 +100,9 @@ class BaseExplainerTG(object):
             raise NotImplementedError
         
         candidate_events = unique_e_idx
-        threshold_num = 20
-        if len(candidate_events) > threshold_num:
-            candidate_events = candidate_events[-threshold_num:]
+        threshold = self.threshold_num
+        if len(candidate_events) > threshold:
+            candidate_events = candidate_events[-threshold:]
             candidate_events = sorted(candidate_events)
         # import ipdb; ipdb.set_trace()
         

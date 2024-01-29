@@ -219,6 +219,7 @@ def pipeline(config: DictConfig):
                 mcts_saved_dir=config.explainers.mcts_saved_dir,
                 load_results=config.explainers.load_results,
                 rollout=config.explainers.param.rollout,
+                threshold_num=config.explainers.param.threshold_num,
                 min_atoms=config.explainers.param.min_atoms,
                 c_puct=config.explainers.param.c_puct,
                 navigator=navigator
@@ -271,6 +272,7 @@ def pipeline(config: DictConfig):
             device=device,
             results_dir=config.explainers.results_dir,
             debug_mode=config.explainers.debug_mode,
+            threshold_num=config.explainers.param.threshold_num,
         )
     elif config.explainers.explainer_name == "pg_explainer_tg":
         from tgnnexplainer.xgraph.method.other_baselines_tg import PGExplainerExt
@@ -290,6 +292,7 @@ def pipeline(config: DictConfig):
             batch_size=config.explainers.param.batch_size,
             lr=config.explainers.param.lr,
             debug_mode=config.explainers.debug_mode,
+            threshold_num=config.explainers.param.threshold_num,
         )
 
     # run the explainer

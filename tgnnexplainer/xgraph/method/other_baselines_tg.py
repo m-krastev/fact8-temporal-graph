@@ -51,7 +51,7 @@ def _create_explainer_input(model: Union[TGAN, TGN], model_name, all_events, can
 
 class PGExplainerExt(BaseExplainerTG):
     def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True,
+                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True, threshold_num=20,
                  # specific params for PGExplainerExt
                  train_epochs: int = 50, explainer_ckpt_dir = None, reg_coefs = None, batch_size = 64, lr=1e-4
                 ):
@@ -64,7 +64,8 @@ class PGExplainerExt(BaseExplainerTG):
                                               device=device,
                                               verbose=verbose,
                                               results_dir=results_dir,
-                                              debug_mode=debug_mode
+                                              debug_mode=debug_mode,
+                                              threshold_num=threshold_num
                                               )
         self.train_epochs = train_epochs
         self.explainer_ckpt_dir = explainer_ckpt_dir
@@ -72,6 +73,7 @@ class PGExplainerExt(BaseExplainerTG):
         self.batch_size = batch_size
         self.lr = lr
         self.expl_input_dim = None
+        self.threshold_num = threshold_num
         self._init_explainer()
         
         self.explainer_ckpt_path = self._ckpt_path(self.explainer_ckpt_dir, self.model_name, self.dataset_name, self.explainer_name)
@@ -260,6 +262,13 @@ class PGExplainerExt(BaseExplainerTG):
         # the same as Attn explainer
         candidate_weights = { self.candidate_events[i]: event_idx_scores[i] for i in range(len(self.candidate_events)) }
         candidate_weights = dict( sorted(candidate_weights.items(), key=lambda x: x[1], reverse=True) ) # NOTE: descending, important
+        
+        threshold = self.threshold_num
+        if len(candidate_weights) > threshold:
+            candidate_weights = candidate_events[-threshold:]
+            candidate_weights = sorted(candidate_weights)
+
+        return candidate_weights
 
         return candidate_weights
 
@@ -271,7 +280,7 @@ class PBOneExplainerTG(BaseExplainerTG):
     perturb only one event to evaluate its influence, then leverage the rank info.
     """
     def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, 
-                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True,
+                 all_events: DataFrame,  explanation_level: str, device, verbose: bool = True, results_dir = None, debug_mode=True, threshold_num=20,
                 ):
         super(PBOneExplainerTG, self).__init__(model=model,
                                               model_name=model_name,
@@ -283,6 +292,7 @@ class PBOneExplainerTG(BaseExplainerTG):
                                               verbose=verbose,
                                               results_dir=results_dir,
                                               debug_mode=debug_mode,
+                                              threshold_num=threshold_num
                                               )
         # assert model_name in ['tgat', 'tgn']
         
@@ -329,6 +339,13 @@ class PBOneExplainerTG(BaseExplainerTG):
         # the same as Attn explainer
         candidate_weights = { e_idx: e_idx_score_dict[e_idx] for e_idx in self.candidate_events }
         candidate_weights = dict( sorted(candidate_weights.items(), key=lambda x: x[1], reverse=True) ) # NOTE: descending, important
+        
+        threshold = self.threshold_num
+        if len(candidate_weights) > threshold:
+            candidate_weights = candidate_events[-threshold:]
+            candidate_weights = sorted(candidate_weights)
+
+        return candidate_weights
         
         return candidate_weights
 

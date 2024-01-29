@@ -379,7 +379,7 @@ class SubgraphXTG(BaseExplainerTG):
     def __init__(self, model, model_name: str, explainer_name: str, dataset_name: str, all_events: DataFrame,  explanation_level: str, device, 
                 verbose: bool = True, results_dir = None, debug_mode: bool = True,
                 # specific params
-                rollout: int = 20, min_atoms: int = 1, c_puct: float = 10.0,
+                rollout: int = 20, min_atoms: int = 1, c_puct: float = 10.0, threshold_num: int = 25,
                 # expand_atoms=14,
                 load_results=False, mcts_saved_dir: Optional[str] = None, save_results: bool= True,
                 navigator=None, navigator_type='mlp', pg_positive=True
@@ -402,6 +402,7 @@ class SubgraphXTG(BaseExplainerTG):
         self.rollout = rollout
         self.min_atoms = min_atoms
         self.c_puct = c_puct
+        self.threshold_num = threshold_num
 
         # saving and visualization
         self.load_results = load_results
