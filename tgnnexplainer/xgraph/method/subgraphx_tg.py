@@ -190,6 +190,8 @@ class MCTS(object):
         #                              c_puct=self.c_puct,
         #                              )
 
+        self.event_id_map = {e_idx: i for i, e_idx in enumerate(
+            self.events.index.values.tolist())}
 
         self.timesteps = self.events['ts'].values
         self.event_indices = self.events.e_idx.values
@@ -322,7 +324,7 @@ class MCTS(object):
         beta = -3
 
         max_event_idx = max(self.root.coalition)
-        curr_t = self.timesteps[max_event_idx-1]
+        curr_t = self.timesteps[self.event_id_map[max_event_idx-1]]
         ts = self.timesteps[np.isin(self.event_indices, node.coalition)]
         # np.array(node.coalition)-1].values # np array
         delta_ts = curr_t - ts
