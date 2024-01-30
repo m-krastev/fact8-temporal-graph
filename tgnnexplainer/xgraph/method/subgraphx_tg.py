@@ -378,7 +378,7 @@ class MCTS(object):
         self.curr_t = self.timesteps[self.event_indices==max_event_idx][0]
 
     def _node_key(self, coalition):
-        return "_".join(map(lambda x: str(x), np.sort(coalition) ) ) # NOTE: have sorted
+        return "_".join(map(lambda x: str(x), sorted(coalition) ) ) # NOTE: have sorted
     
 
 
