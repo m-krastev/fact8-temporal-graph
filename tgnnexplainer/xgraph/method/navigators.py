@@ -74,7 +74,7 @@ class MLPNavigator():
         edge_weights = self.mlp(input_expl)
 
         # added to original model attention scores
-        candidate_weights_dict = {'candidate_events': torch.tensor(self.candidate_events, dtype=torch.int64, device=self.device),
+        candidate_weights_dict = {'candidate_events': torch.tensor(candidate_event_idx, dtype=torch.int64, device=self.device),
                                   'edge_weights': edge_weights,
                                   }
         src_idx_l, target_idx_l, cut_time_l = _set_tgat_data(
