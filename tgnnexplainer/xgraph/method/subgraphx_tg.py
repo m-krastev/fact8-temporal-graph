@@ -106,15 +106,23 @@ class MCTSNode(object):
 
 
 def compute_scores(score_func, base_events, children, state_dict, target_event_idx):
-    results = []
-    for child in children:
-        if state_dict[child].P == 0:
-            # score = score_func(child.coalition, child.data)
-            score = score_func( base_events + state_dict[child].coalition, target_event_idx)
-        else:
-            score = state_dict[child].P
-        results.append(score)
-    return results
+    
+    # results = []
+    # for child in children:
+    #     if state_dict[child].P == 0:
+    #         # score = score_func(child.coalition, child.data)
+    #         score = score_func( base_events + state_dict[child].coalition, target_event_idx)
+    #     else:
+    #         score = state_dict[child].P
+    #     results.append(score)
+
+    # Always use list comprehension whenever possible
+    return [
+        state_dict[child].P 
+        if state_dict[child].P else 
+        score_func(base_events + state_dict[child].coalition, target_event_idx)
+        for child in children
+    ]
 
 def base_and_important_events(base_events, candidate_events, coalition):
     return base_events + coalition
@@ -182,7 +190,11 @@ class MCTS(object):
         #                              c_puct=self.c_puct,
         #                              )
 
+        self.event_id_map = {e_idx: i for i, e_idx in enumerate(
+            self.events.index.values.tolist())}
 
+        self.timesteps = self.events['ts'].values
+        self.event_indices = self.events.e_idx.values
         self._initialize_tree()
         self._initialize_recorder()
         
@@ -274,7 +286,9 @@ class MCTS(object):
         return v
 
     def _select_expand_candidates(self, not_exist_children):
-        assert self.candidate_initial_weights is not None
+        # WARNING: Not a cheap assert, but for the sake of safety, please turn it on in development time.
+
+        # assert self.candidate_initial_weights is not None
         # SORT by candidate weights (computed by the navigator)
         return sorted(not_exist_children, key=self.candidate_initial_weights.get)
 
@@ -310,8 +324,8 @@ class MCTS(object):
         beta = -3
 
         max_event_idx = max(self.root.coalition)
-        curr_t = self.events['ts'][max_event_idx-1]
-        ts = self.events['ts'][self.events.e_idx.isin(node.coalition)].values
+        curr_t = self.timesteps[self.event_id_map[max_event_idx-1]]
+        ts = self.timesteps[np.isin(self.event_indices, node.coalition)]
         # np.array(node.coalition)-1].values # np array
         delta_ts = curr_t - ts
         t_score_exp = np.exp( beta * delta_ts)
@@ -363,7 +377,7 @@ class MCTS(object):
         self.state_map = {self.root_key: self.root}
 
         max_event_idx = max(self.root.coalition)
-        self.curr_t = self.events['ts'][self.events.e_idx==max_event_idx].values[0]
+        self.curr_t = self.timesteps[self.event_indices==max_event_idx][0]
 
     def _node_key(self, coalition):
         return "_".join(map(lambda x: str(x), sorted(coalition) ) ) # NOTE: have sorted
