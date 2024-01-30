@@ -1,0 +1,15 @@
+\begin{table}
+\centering
+\begin{tabular}{lcccccccc}
+\toprule
+ & \multicolumn{2}{c}{Wikipedia} & \multicolumn{2}{c}{Reddit} & \multicolumn{2}{c}{Simulate V1} & \multicolumn{2}{c}{Simulate V2} \\
+ & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC \\
+\midrule
+ATTN & 0.891 & 0.564 & 0.658 & -0.654 & 0.555 & -0.081 & 0.605 & 0.291 \\
+PBONE & 0.027 & -2.227 & 0.167 & -2.492 & 0.044 & -2.882 & 0.096 & -4.771 \\
+PG & 1.354 & 0.564 & 0.804 & -0.369 & 0.555 & 0.390 & 1.329 & -0.926 \\
+TGNN-X & 1.836 & 1.477 & 1.518 & 1.076 & 0.780 & 0.666 & 1.630 & 1.331 \\
+\bottomrule
+\end{tabular}
+\caption{\label{tab:tgat_results_og}Results for TGAT model from the original paper.}
+\end{table}
