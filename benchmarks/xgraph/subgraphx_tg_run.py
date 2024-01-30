@@ -112,7 +112,6 @@ def pipeline(config: DictConfig):
     # DONE: only use tgat processed data
     events, edge_feats, node_feats = load_tg_dataset(config.datasets.dataset_name)
     target_event_idxs = load_explain_idx(config.datasets.explain_idx_filepath, start=0)
-    target_event_idxs = target_event_idxs[:10]
     ngh_finder = construct_tgat_neighbor_finder(events)
 
     if config.models.model_name == "tgat":
