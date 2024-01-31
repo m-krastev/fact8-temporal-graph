@@ -21,6 +21,7 @@ class BaseExplainerTG(object):
                  verbose: bool = True,
                  results_dir: Optional[str] = None,
                  debug_mode: bool=True,
+                 navigator_type: str = None,
                  threshold_num: int=25) -> None:
         """
         results_dir: dir for saving value results, e.g., fidelity_sparsity. Not mcts_node_list
@@ -28,6 +29,7 @@ class BaseExplainerTG(object):
         self.model = model
         self.model_name = model_name
         self.explainer_name = explainer_name # self's name
+        self.navigator_type = navigator_type # navigator's name (can be None)
         self.dataset_name = dataset_name
         self.all_events = all_events
         self.num_users = all_events.iloc[:, 0].max() + 1
@@ -150,16 +152,19 @@ class BaseExplainerTG(object):
         # self.candidate_initial_weights = None
         self.candidate_initial_weights = { e_idx: np.random.random() for e_idx in self.candidate_events }
 
-        
+
 
     @staticmethod
-    def _score_path(results_dir, model_name, dataset_name, explainer_name, event_idx,):
+    def _score_path(results_dir, model_name, dataset_name, explainer_name, navigator_type, event_idx, th_num):
         """
         only for baseline explainer, save their computed candidate scores.
         """
         savepath = results_dir / "candidate_scores"
         savepath.mkdir(parents=True, exist_ok=True)
-        score_filename = savepath / f'{model_name}_{dataset_name}_{explainer_name}_{event_idx}_candidate_scores.csv'
+        score_filename = savepath / \
+            f'{model_name}_{dataset_name}_{explainer_name}'\
+            f'{"_"+navigator_type or ""}'\
+            f'_{event_idx}_th{th_num}_candidate_scores.csv'
         return score_filename
 
     def _save_candidate_scores(self, candidate_weights, event_idx, runtimes):
@@ -167,7 +172,7 @@ class BaseExplainerTG(object):
         only for baseline explainer, save their computed candidate scores.
         """
         assert isinstance(candidate_weights, dict)
-        filename = self._score_path(self.results_dir, self.model_name, self.dataset_name, self.explainer_name, event_idx)
+        filename = self._score_path(self.results_dir, self.model_name, self.dataset_name, self.explainer_name, self.navigator_type, event_idx, self.threshold_num)
         data_dict = {
             'candidates': [],
             'scores': [],

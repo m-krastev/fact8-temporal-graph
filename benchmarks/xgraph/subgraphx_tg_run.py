@@ -174,9 +174,28 @@ def pipeline(config: DictConfig):
         config.explainers.explainer_name == "subgraphx_tg"
     ):  # DONE: test this 'use_pg_explainer'
         from tgnnexplainer.xgraph.method.subgraphx_tg import SubgraphXTG
-        from tgnnexplainer.xgraph.method.navigators import MLPNavigator, DotProductNavigator
+        from tgnnexplainer.xgraph.method.navigators import PGNavigator, MLPNavigator, DotProductNavigator
 
-        if config.explainers.navigator_type == 'mlp':
+        if config.explainers.navigator_type == 'pg':
+            # use their navigator
+            navigator = PGNavigator(
+                model,
+                config.models.model_name,
+                config.explainers.explainer_name,
+                config.datasets.dataset_name,
+                events,
+                config.explainers.param.explanation_level,
+                device=device,
+                results_dir=config.explainers.results_dir,
+                debug_mode=config.explainers.debug_mode,
+                train_epochs=config.explainers.param.train_epochs,
+                explainer_ckpt_dir=config.explainers.explainer_ckpt_dir,
+                reg_coefs=config.explainers.param.reg_coefs,
+                batch_size=config.explainers.param.batch_size,
+                lr=config.explainers.param.lr
+            )
+        elif config.explainers.navigator_type == 'mlp':
+            # use our MLP navigator
             navigator = MLPNavigator(
                 model,
                 config.models.model_name,
@@ -194,6 +213,7 @@ def pipeline(config: DictConfig):
                 lr=config.explainers.param.lr
             )
         elif config.explainers.navigator_type == 'dot':
+            # use our DotProduct navigator
             navigator = DotProductNavigator(
                 model=model,
                 model_name=config.models.model_name,
@@ -329,6 +349,7 @@ def pipeline(config: DictConfig):
             dataset_name=config.datasets.dataset_name,
             explainer=explainer[0] if isinstance(explainer, list) else explainer,
             results_dir=config.explainers.results_dir,
+            threshold_num=config.explainers.param.threshold_num
         )
     elif config.explainers.explainer_name in [
         "attn_explainer_tg",
@@ -343,6 +364,7 @@ def pipeline(config: DictConfig):
             dataset_name=config.datasets.dataset_name,
             explainer=explainer,
             results_dir=config.explainers.results_dir,
+            threshold_num=config.explainers.param.threshold_num
         )  # DONE: updated
     else:
         raise NotImplementedError
