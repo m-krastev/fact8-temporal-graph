@@ -145,13 +145,20 @@ class MCTS(object):
         node_idx (:obj:`int`): The target node index to extract the neighborhood.
         score_func (:obj:`Callable`): The reward function for tree node, such as mc_shapely and mc_l_shapely.
     """
-    def __init__(self, events: DataFrame, candidate_events = None, base_events = None, candidate_initial_weights = None,
-                 node_idx: int = None, event_idx: int = None,
-                 n_rollout: int = 10, min_atoms: int = 5, c_puct: float = 10.0,
+    def __init__(self,
+                 events: DataFrame,
+                 candidate_events = None,
+                 base_events = None,
+                 candidate_initial_weights = None,
+                 node_idx: int = None,
+                 event_idx: int = None,
+                 n_rollout: int = 10,
+                 min_atoms: int = 5,
+                 c_puct: float = 10.0,
                  score_func: Callable = None, 
                 #  device='cpu'
                  ):
-        
+
         self.events = events # subgraph events or total events? subgraph events
         # self.num_users = num_users
         self.subgraph_num_nodes = self.events.iloc[:, 0].nunique() + self.events.iloc[:, 1].nunique()
@@ -383,8 +390,6 @@ class MCTS(object):
         return "_".join(map(lambda x: str(x), sorted(coalition) ) ) # NOTE: have sorted
     
 
-
-
 class SubgraphXTG(BaseExplainerTG):
     """
     MCTS based temporal graph GNN explainer
@@ -425,9 +430,9 @@ class SubgraphXTG(BaseExplainerTG):
                                           verbose=verbose,
                                           results_dir=results_dir,
                                           debug_mode=debug_mode,
-                                          threshold_num=threshold_num
+                                          threshold_num=threshold_num,
+                                          navigator_type=navigator_type
                                           )
-
 
         # mcts hyper-parameters
         self.rollout = rollout
@@ -505,12 +510,14 @@ class SubgraphXTG(BaseExplainerTG):
     def _path_suffix(navigator, navigator_type, pg_positive):
         if navigator is not None:
             if navigator_type == 'mlp': # not the nicest solution, but trying to keep it compatible
+                suffix = 'mlp_true'
+            elif navigator_type == 'pg':
                 suffix = 'pg_true'
             else:
                 suffix = 'dot_true'
         else:
             suffix = 'pg_false'
-        
+
         if navigator is not None:
             # FIXME: this is just ugly at this point, but don't want to break file naming convention if the MLP navigator is used.
             if pg_positive is True:
@@ -524,18 +531,18 @@ class SubgraphXTG(BaseExplainerTG):
     def _mcts_recorder_path(result_dir, model_name, dataset_name, event_idx, suffix, th_num):
         result_dir = result_dir / "candidate_scores"
         if suffix is not None:
-            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{suffix}_{th_num}.csv'
+            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{suffix}_th{th_num}.csv'
         else:
-            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_{th_num}.csv'
-        
+            record_filename = result_dir/f'{model_name}_{dataset_name}_{event_idx}_mcts_recorder_th{th_num}.csv'
+
         return record_filename
     
     @staticmethod
     def _mcts_node_info_path(node_info_dir, model_name, dataset_name, event_idx, suffix, th_num):
         if suffix is not None:
-            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{suffix}_{th_num}.pt"
+            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{suffix}_th{th_num}.pt"
         else:
-            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_{th_num}.pt"
+            nodeinfo_filename = Path(node_info_dir)/f"{model_name}_{dataset_name}_{event_idx}_mcts_node_info_th{th_num}.pt"
 
         return nodeinfo_filename
 

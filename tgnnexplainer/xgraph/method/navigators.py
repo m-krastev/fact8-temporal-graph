@@ -7,7 +7,15 @@ from tgnnexplainer.xgraph.method.tg_score import _set_tgat_data
 from pandas import DataFrame
 from copy import deepcopy
 
-class MLPNavigator():
+class PGNavigator():
+    """
+        Navigator class implementing the author's version of the navigator.
+        When called, it computes
+        - the importance scores of the candidate events
+        - the aggregated attention scores of the candidate events,
+          masked by the importance scores
+        - the final candidate scores are the aggregated attention scores
+    """
     def __init__(self,
                  model,
                  model_name: str,
@@ -60,10 +68,8 @@ class MLPNavigator():
         """
             Construct input for the pre-trained navigator (MLP)
             Call the navigator (MLP) on the input
-            Return the edge weights
-
-            Note: the input consists of pair-wise concatenation 
-                of the target event and the candidate events.
+            Evaluate the target on the candidate events, masked by the output of the navigator
+            Return the mean attention scores over the layers of the target model
         """
         # ensure evaluation mode
         self.mlp.eval()
@@ -92,6 +98,31 @@ class MLPNavigator():
 
         return edge_weights
 
+class MLPNavigator(PGNavigator):
+    """
+        Our implementation of the navigator.
+        When called, it computes
+        - the importance scores of the candidate events
+        - these scores are used as candidate weights
+    """
+    def __call__(self, candidate_event_idx, target_idx):
+        """
+            Construct input for the pre-trained navigator (MLP)
+            Call the navigator (MLP) on the input
+            Return the edge weights
+
+            Note: the input consists of pair-wise concatenation
+                of the target event and the candidate events.
+        """
+        # ensure evaluation mode
+        self.mlp.eval()
+        input_expl = _create_explainer_input(self.model, self.model_name, self.all_events,
+                    candidate_events=candidate_event_idx, event_idx=target_idx, device=self.device)
+
+        # compute importance scores
+        edge_weights = self.mlp(input_expl)
+
+        return edge_weights
 
 class DotProductNavigator():
     """
