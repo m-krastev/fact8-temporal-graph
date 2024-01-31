@@ -121,7 +121,8 @@ class DotProductNavigator():
                 src_embed = self.model.tem_conv(src, cut_time, self.model.num_layers)
                 dst_embed = self.model.tem_conv(dst, cut_time, self.model.num_layers)
             # concatenate source and destination embeddings for each event
-            embed = np.concatenate((src_embed, dst_embed), axis=1)
+            embed = torch.concatenate(
+                (src_embed, dst_embed), dim=1).detach().cpu().numpy()
             # compute dot product between the target event and the candidate events
             dot_product = np.dot(embed[:-1], embed[-1])
             # we can also normalize the dot product, but it may not matter much since these scores are just used for sorting the candidates
