@@ -25,7 +25,7 @@ class BaseEvaluator():
 
         self.results_dir = results_dir
         self.suffix = None
-        self.threshold_num
+        self.threshold_num = threshold_num
 
 
     @staticmethod
