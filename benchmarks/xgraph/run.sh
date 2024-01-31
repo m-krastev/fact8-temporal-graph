@@ -1,12 +1,12 @@
 #!/usr/bin/env zsh
 # run all explainers
 
-datasets=(simulate_v1 simulate_v2 )
-models=(tgn tgat )
+datasets=(simulate_v1 simulate_v2 reddit wikipedia)
+models=(tgat tgn)
 
 cd "$ROOT/benchmarks/xgraph"
 echo "cwd: $PWD"
-processes=8
+processes=4
 threshold_num=$1
 echo "threshold num: ${threshold_num}"
 # alias python=/Users/Matey/project/fact8/.venv/bin/python3
