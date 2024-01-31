@@ -1,15 +1,13 @@
-\begin{table}
-\centering
-\begin{tabular}{lcccccccc}
+\begin{tabular}{lrrrrrrrr}
 \toprule
  & \multicolumn{2}{c}{Wikipedia} & \multicolumn{2}{c}{Reddit} & \multicolumn{2}{c}{Simulate V1} & \multicolumn{2}{c}{Simulate V2} \\
  & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC \\
 \midrule
-ATTN & 0.515 & 0.313 & 0.145 & -1.546 & 1.502 & 0.889 & 1.660 & -0.677 \\
-PBONE & 0.648 & 0.393 & 0.244 & -0.629 & 1.814 & 0.886 & 2.813 & -0.290 \\
+ATTN & 0.515 & 0.313 & 0.145 & -1.546 & 1.502 & \underline 0.889 & 1.660 & -0.677 \\
+PBONE & 0.648 & \underline 0.393 & \underline 0.244 & \bfseries -0.629 & \underline 1.814 & 0.886 & \underline 2.813 & -0.290 \\
 PG & 0.460 & -0.367 & 0.117 & -2.209 & 1.436 & 0.092 & 1.112 & -1.903 \\
-TGNN-X & 0.829 & 0.444 & 0.239 & -1.492 & 2.037 & 1.611 & 2.443 & 0.898 \\
+TGNN-X & \underline 0.829 & \bfseries 0.444 & 0.239 & -1.492 & \bfseries 2.037 & \bfseries 1.611 & 2.443 & \bfseries 0.898 \\
+TGNN-X (DOT) & \bfseries 0.943 & 0.317 & \bfseries 0.291 & \underline -1.391 & 1.219 & 0.053 & \bfseries 2.975 & \underline 0.404 \\
 \bottomrule
 \end{tabular}
-\caption{\label{tab:tgn_results}Explainer results for TGN model.}
-\end{table}
+\caption{\label{tab:tgn_results}$\dagger$ Explainer results for TGN model.}
