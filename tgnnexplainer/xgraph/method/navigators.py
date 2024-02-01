@@ -172,7 +172,7 @@ class DotProductNavigator():
             embed = torch.concatenate(
                 (src_embed, dst_embed), dim=1)
             # compute dot product between the target event and the candidate events
-            dot_product = torch.dot(embed[:-1], embed[-1])
+            dot_product = embed[:-1] @ embed[-1].T
             # we can also normalize the dot product, but it may not matter much since these scores are just used for sorting the candidates
 
             # return the scores for all inputs. The selection of candidates is done elsewhere.
