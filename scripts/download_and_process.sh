@@ -1,8 +1,8 @@
 #!/bin/bash
 echo $PWD
 # Data downloading and preprocessing
-# curl http://snap.stanford.edu/jodie/reddit.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/reddit.csv"
-# curl http://snap.stanford.edu/jodie/wikipedia.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/wikipedia.csv"
+curl http://snap.stanford.edu/jodie/reddit.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/reddit.csv"
+curl http://snap.stanford.edu/jodie/wikipedia.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/wikipedia.csv"
 
 # download simulated datasets
 # NOTE: the simulated dataset is already pre-generated and pre-processed
@@ -27,5 +27,9 @@ python process.py -d reddit
 cd "$ROOT/tgnnexplainer/xgraph/dataset"
 python tg_dataset.py -d wikipedia -c index
 python tg_dataset.py -d reddit -c index
-python tg_dataset.py -d simulate_v1 -c index
-python tg_dataset.py -d simulate_v2 -c index
+if [ -f "$ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v1.csv" ]; then
+    python tg_dataset.py -d simulate_v1 -c index
+fi
+if [ -f "$ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v2.csv" ]; then
+    python tg_dataset.py -d simulate_v2 -c index
+fi

@@ -23,9 +23,9 @@ if [ ! -d "$ROOT/.venv" ]; then
     python3 -m pip install "$ROOT"
 fi
 
-# download the raw- and the processed data
-# TODO: also needs to processed scripts, not just the raw data
-scripts/download_and_process.sh
-
-# download the checkpoints for the target models
-scripts/download_checkpoints.sh
+echo "Installation complete"
+echo "To activate the environment, run: source $ROOT/.venv/bin/activate"
+echo "To deactivate the environment, run: deactivate"
+echo
+echo "Next, please make sure the supplementary material is available locally as a zip file."
+echo "Finally, please run $ROOT/scripts/unpack.sh to unzip and organize the data, weights, and results."
