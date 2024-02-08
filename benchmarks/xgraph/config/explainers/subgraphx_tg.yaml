@@ -21,7 +21,7 @@ param:
     rollout: 500
     c_puct: 5
     min_atoms: 100
-    threshold_num: 25
+    threshold_num: 20
     train_epochs: 100 # 20
     reg_coefs:
       - 0.5
@@ -34,7 +34,7 @@ param:
     rollout: 500
     c_puct: 5
     min_atoms: 6
-    threshold_num: 25
+    threshold_num: 20
     train_epochs: 30 # 20
     reg_coefs:
       - 0.5
@@ -47,7 +47,7 @@ param:
     rollout: 500
     c_puct: 5
     min_atoms: 20 # only influence use_pg_explainer's fidelity-rollout curve
-    threshold_num: 25
+    threshold_num: 20
     train_epochs: 20 # 20
     reg_coefs:
       - 0.5
@@ -60,7 +60,7 @@ param:
     rollout: 500
     c_puct: 5
     min_atoms: 20
-    threshold_num: 25
+    threshold_num: 20
     train_epochs: 20 # 20
     reg_coefs:
       - 0.5
