@@ -22,7 +22,7 @@ requires-python = ">=3.8"
 version = "0.1.1-dev"
 
 dependencies = [
-    "scipy","shap", "IPython", "tqdm", "rdkit", "pandas", "sympy", "hydra-core", "torch", "matplotlib", "torch_geometric"
+    "scipy","shap", "IPython", "tqdm", "rdkit", "pandas", "sympy", "hydra-core", "torch", "matplotlib", "torch_geometric", "ipykernel", "seaborn"
 ]
 
 [tool.setuptools]
