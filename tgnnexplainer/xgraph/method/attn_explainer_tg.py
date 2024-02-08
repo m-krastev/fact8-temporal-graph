@@ -97,35 +97,3 @@ class AttnExplainerTG(BaseExplainerTG):
             self._save_candidate_scores(candidate_weights, event_idx, len(candidate_weights)* [tock])
         
         return results_list
-
-
-class AttnExplainerV2(AttnExplainerTG):
-    """
-        ATTN explainer only considering the attention weights of the last layer
-    """
-
-    def _agg_attention(self, model, model_name):
-        # after a forward computation in the model
-
-        # aggregate attention weights
-        if model_name == 'tgat':
-            # get the attention weights and edge indices of the last layer
-            last_atten_weights_dict = model.atten_weights_list[-1]
-            # obtain edge indices involved with the last layer
-            edge_idxs = last_atten_weights_dict['src_ngh_eidx']
-            # aggregate over the attention heads
-            weights = last_atten_weights_dict['attn_weight'].mean(dim=0)
-        elif model_name == 'tgn':
-            # get the attention weights and edge indices of the last layer
-            last_atten_weights_dict = model.embedding_module.atten_weights_list[-1]
-            # obtain edge indices involved with the last layer
-            edge_idxs = last_atten_weights_dict['src_ngh_eidx']
-            # get the attention weights of the last layer
-            weights = last_atten_weights_dict['attn_weight']
-
-        edge_idxs = edge_idxs.detach().cpu().numpy().flatten()
-        weights = weights.detach().cpu().numpy().flatten()
-
-        e_idx_weight_dict = {eidx: w for eidx, w in zip(edge_idxs, weights)}
-
-        return e_idx_weight_dict
