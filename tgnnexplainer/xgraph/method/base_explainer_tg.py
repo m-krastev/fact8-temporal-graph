@@ -161,10 +161,10 @@ class BaseExplainerTG(object):
         """
         savepath = results_dir / "candidate_scores"
         savepath.mkdir(parents=True, exist_ok=True)
+        nav_type = f"_{navigator_type}" if navigator_type else ""
         score_filename = savepath / \
             f'{model_name}_{dataset_name}_{explainer_name}'\
-            f'{"_"+navigator_type or ""}'\
-            f'_{event_idx}_th{th_num}_candidate_scores.csv'
+            f'{nav_type}_{event_idx}_candidate_scores_th{th_num}.csv'
         return score_filename
 
     def _save_candidate_scores(self, candidate_weights, event_idx, runtimes):
