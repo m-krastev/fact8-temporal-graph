@@ -1,14 +1,17 @@
+\begin{table}
+\caption{Runtime comparison for a single explanation with TGN base model (in seconds).}
+\label{tab:tgn_runtime_single}
 \begin{tabular}{lrrrrrrrr}
 \toprule
  & Synthetic V1 & Synthetic V2 & Wikipedia & Reddit \\
 \midrule
-ATTN & 0.006 & 0.006 & 0.014 & 0.029 \\
-PBONE & 0.079 & 0.079 & 0.222 & 0.251 \\
-PG & 0.001 & 0.001 & 0.001 & 0.001 \\
-THEIRS & 29.252 & 13.301 & 45.987 & 56.312 \\
-THEIRS (NO NAV) & 17.274 & 13.239 & 51.807 & 56.552 \\
-OURS & 23.547 & 14.031 & 42.573 & 74.467 \\
-OURS (DOT) & 25.381 & 12.470 & 69.283 & 56.260 \\
+ATTN & 0.006±0.0 & 0.006±0.0 & 0.014±0.0 & 0.029±0.0 \\
+PBONE & 0.079±0.0 & 0.079±0.0 & 0.222±0.0 & 0.251±0.0 \\
+PG & 0.001±0.0 & 0.001±0.0 & 0.001±0.0 & 0.001±0.0 \\
+PGNavigator & 29.252±6.8 & 13.301±1.4 & 45.987±11.5 & 56.312±7.5 \\
+PGNavigator (NO NAV) & 17.274±3.8 & 13.239±1.8 & 51.807±11.8 & 56.552±7.9 \\
+MLPNavigator & 23.547±8.9 & 14.031±1.6 & 42.573±6.8 & 74.467±18.2 \\
+DotProductNavigator & 25.381±4.6 & 12.470±1.5 & 69.283±28.6 & 56.260±8.1 \\
 \bottomrule
 \end{tabular}
-\caption{\label{tab:tgn_runtime_single}Runtime comparison for a single explanation with TGN base model (in seconds).}
+\end{table}
