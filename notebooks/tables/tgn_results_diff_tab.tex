@@ -1,0 +1,16 @@
+\begin{table}
+\centering
+\caption{Relative difference in results for TGN model with respect to the original paper (in \%).}
+\label{tab:tgn_results_diff}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{Wikipedia} & \multicolumn{2}{c}{Reddit} & \multicolumn{2}{c}{Simulate V1} & \multicolumn{2}{c}{Simulate V2} \\
+ & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC \\
+\midrule
+ATTN & 197.033 & 980.014 & 186.780 & -437.141 & -72.596 & -74.254 & -81.690 & 129.742 \\
+PBONE & 466.775 & -224.938 & 778.892 & -153.866 & 73351.165 & -113.057 & -17.116 & -88.612 \\
+PG & 184.266 & -95.200 & 45.838 & -11664.245 & -72.589 & -166.895 & -85.158 & 62.869 \\
+PGNavigator & 110.238 & 148.700 & 107.432 & 58.986 & -66.004 & -70.174 & -93.906 & -132.758 \\
+\bottomrule
+\end{tabular}
+\end{table}

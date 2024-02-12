@@ -1,0 +1,16 @@
+\begin{table}
+\centering
+\caption{Relative difference in results for TGAT model with respect to the original paper (in \%).}
+\label{tab:tgat_results_diff}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{Wikipedia} & \multicolumn{2}{c}{Reddit} & \multicolumn{2}{c}{Simulate V1} & \multicolumn{2}{c}{Simulate V2} \\
+ & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC \\
+\midrule
+ATTN & -40.546 & -85.443 & -93.785 & -82.411 & 57.212 & 52.502 & -21.486 & -412.173 \\
+PBONE & 3381.139 & -124.126 & 294.332 & -113.917 & 2760.941 & -129.916 & 1176.928 & -118.316 \\
+PG & -54.233 & -146.531 & -10.673 & -156.970 & 50.210 & 407.540 & -63.990 & -11.286 \\
+PGNavigator & -37.082 & -42.960 & -48.038 & -33.124 & 94.020 & 71.568 & -29.114 & -66.640 \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,17 @@
+\begin{table}
+\caption{Runtime comparison for a single event explanation with TGAT base model (in seconds).}
+\label{tab:tgn_runtime_single}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & Synthetic V1 & Synthetic V2 & Wikipedia & Reddit \\
+\midrule
+ATTN & 0.009±0.0 & 0.009±0.0 & 0.016±0.0 & 0.034±0.0 \\
+PBONE & 0.132±0.0 & 0.132±0.0 & 0.265±0.0 & 0.282±0.0 \\
+PG & 0.001±0.0 & 0.001±0.0 & 0.001±0.0 & 0.001±0.0 \\
+PGNavigator & 39.956±10.4 & 44.591±13.1 & 43.178±2.9 & 52.496±6.5 \\
+PGNavigator (NO NAV) & 33.784±5.9 & 34.971±14.3 & 47.286±12.0 & 80.111±17.8 \\
+MLPNavigator & 33.577±7.0 & 43.377±12.3 & 63.063±11.9 & 56.848±7.3 \\
+DotProductNavigator & 36.433±7.9 & 40.787±18.4 & 49.003±11.6 & 52.723±6.5 \\
+\bottomrule
+\end{tabular}
+\end{table}

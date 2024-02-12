@@ -1,0 +1,17 @@
+\begin{table}
+\caption{$\dagger$ Explainer results for {model.upper()} model}
+\label{tab:tgat_results}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & \multicolumn{2}{c}{Wikipedia} & \multicolumn{2}{c}{Reddit} & \multicolumn{2}{c}{Simulate V1} & \multicolumn{2}{c}{Simulate V2} \\
+ & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC & Best FID & AUFSC \\
+\midrule
+ATTN & 0.530 & 0.082 & 0.041 & -0.115 & 0.873 & 0.595 & 0.475 & -0.908 \\
+PBONE & 0.940 & 0.537 & 0.659 & 0.347 & 1.259 & 0.862 & \bfseries 1.226 & \bfseries 0.874 \\
+PG & 0.620 & -0.322 & 0.718 & 0.210 & 0.715 & -0.411 & 0.479 & -0.821 \\
+PGNavigator & \underline 1.155 & \bfseries 0.842 & \underline 0.789 & \bfseries 0.720 & \bfseries 1.513 & \bfseries 1.143 & 1.155 & 0.444 \\
+MLPNavigator & \bfseries 1.182 & \underline 0.777 & \bfseries 0.795 & 0.605 & \underline 1.395 & \underline 0.881 & 1.162 & 0.368 \\
+DotProductNavigator & 0.987 & 0.469 & 0.783 & \underline 0.713 & 1.253 & 0.598 & \underline 1.223 & \underline 0.596 \\
+\bottomrule
+\end{tabular}
+\end{table}
