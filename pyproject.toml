@@ -11,12 +11,7 @@ authors = [
     {name = "Xiang Li", email = "xiangli@dase.ecnu.edu.cn"},
     {name="Dongsheng Li", email="donsheng.li@microsoft.com"},
 ]
-maintainers = [
-    {name = "Matey Krastev", email = "matey.krastev@student.uva.nl"},
-    {name = "Kristiyan Hristov", email = "kristiyan.hristov@student.uva.nl"},
-    {name = "Miklos Hamar", email="miklos.hamar@student.uva.nl"},
-    {name = "David Beglou", email="david.beglou@student.uva.nl"}
-]
+
 license = {file = "LICENSE"}
 requires-python = ">=3.8"
 version = "0.1.1-dev"
