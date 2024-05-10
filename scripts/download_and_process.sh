@@ -8,16 +8,15 @@ curl http://snap.stanford.edu/jodie/wikipedia.csv > "$ROOT/tgnnexplainer/xgraph/
 # NOTE: the simulated dataset is already pre-generated and pre-processed
 #      otherwise, the tick library would be needed which is only stable with Python 3.8
 #      see tgnnexplainer/xgraph/dataset/generate_simulate_dataset.py
+curl https://m-krastev.github.io/hawkes-sim-datasets/simulate_v1.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v1.csv"
+curl https://m-krastev.github.io/hawkes-sim-datasets/ml_simulate_v1.csv > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v1.csv"
+curl https://m-krastev.github.io/hawkes-sim-datasets/ml_simulate_v1.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v1.npy"
+curl https://m-krastev.github.io/hawkes-sim-datasets/ml_simulate_v1_node.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v1_node.npy"
 
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/simulate_v1.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v1.csv"
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/ml_simulate_v1.csv > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v1.csv"
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/ml_simulate_v1.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v1.npy"
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/ml_simulate_v1_node.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v1_node.npy"
-
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/simulate_v2.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v2.csv"
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/ml_simulate_v2.csv > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v2.csv"
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/ml_simulate_v2.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v2.npy"
-curl https://anonymous.4open.science/api/repo/hawkes-sim-datasets-56E2/file/ml_simulate_v2_node.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v2_node.npy"
+curl https://m-krastev.github.io/hawkes-sim-datasets/simulate_v2.csv > "$ROOT/tgnnexplainer/xgraph/dataset/data/simulate_v2.csv"
+curl https://m-krastev.github.io/hawkes-sim-datasets/ml_simulate_v2.csv > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v2.csv"
+curl https://m-krastev.github.io/hawkes-sim-datasets/ml_simulate_v2.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v2.npy"
+curl https://m-krastev.github.io/hawkes-sim-datasets/ml_simulate_v2_node.npy > "$ROOT/tgnnexplainer/xgraph/models/ext/tgat/processed/ml_simulate_v2_node.npy"
 
 # process the real datasets
 cd  "$ROOT/tgnnexplainer/xgraph/models/ext/tgat"
