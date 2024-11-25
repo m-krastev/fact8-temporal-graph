@@ -23,10 +23,18 @@ The package was tested with Python >= 3.11.0 with the packages defined in the `p
 
 ## Populating the repository with supplementary data
 
-To save some time we made all the datasets, (both raw and processed), model weights and our reported results available for download. Please obtain this file manually and save it in the project root folder, e.g. `$ROOT/data.zip`. Once this is done, you can run the following command to extract the data:
+To save some time we made all the datasets, (both raw and processed), model weights and our reported results available for download.
 
-```Bash
-./scripts/unpack.sh --source $ROOT/data.zip --data --weights --results
+
+ Please obtain this file manually using the following command and save it in the project root.
+```bash
+wget -P /path/to/project_root https://github.com/m-krastev/fact8-temporal-graph/releases/download/dev/combined.zip
+```
+
+  Once this is done, you can run the following command to extract the data:
+
+```bash
+./scripts/unpack.sh --source /path/to/project_root/combined.zip --data --weights --results
 ```
 
 This will extract all the datasets, model weights and our reported results. To exclude any of these, you can omit the corresponding flags from the above command.
